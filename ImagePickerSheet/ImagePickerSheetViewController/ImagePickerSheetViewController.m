@@ -15,8 +15,11 @@
 #import <AssetsLibrary/AssetsLibrary.h>
 #import "DefineHeader.h"
 
+#import <AVFoundation/AVFoundation.h>
+#import <MobileCoreServices/UTCoreTypes.h>
 
-@interface ImagePickerSheetViewController () <UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout, UITableViewDelegate, UITableViewDataSource>
+
+@interface ImagePickerSheetViewController () <UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout, UITableViewDelegate, UITableViewDataSource, UINavigationControllerDelegate, UIImagePickerControllerDelegate>
 {
     /** 显示大图 */
     BOOL enlargedPreviews;
@@ -223,20 +226,27 @@
 - (void)dismiss:(void (^)(void))completion
 {
     if (self.isVisible == YES) {
-        [UIView animateWithDuration:self.animationTime
-                              delay:0
-                            options:UIViewAnimationOptionCurveEaseIn
-                         animations:^{
-                             [self.tableView setFrame:self.hiddenFrame];
-                             self.backgroundView.alpha = 0;
-                         }
-                         completion:^(BOOL finished) {
-                             [self.tableView removeFromSuperview];
-                             [self.backgroundView removeFromSuperview];
-                             [self dismissViewControllerAnimated:NO completion:completion];
-                         }];
+        [self hideView:^{
+            [self.tableView removeFromSuperview];
+            [self.backgroundView removeFromSuperview];
+            [self dismissViewControllerAnimated:NO completion:completion];
+        }];
         // Set everything to nil
     }
+}
+
+- (void)hideView:(void (^)(void))completion
+{
+    [UIView animateWithDuration:self.animationTime
+                          delay:0
+                        options:UIViewAnimationOptionCurveEaseIn
+                     animations:^{
+                         [self.tableView setFrame:self.hiddenFrame];
+                         self.backgroundView.alpha = 0;
+                     }
+                     completion:^(BOOL finished) {
+                         completion();
+                     }];
 }
 
 - (CGSize)sizeForAsset:(ALAsset *)asset {
@@ -434,27 +444,95 @@
     [self.tableView reloadSections:[NSIndexSet indexSetWithIndex:1] withRowAnimation:UITableViewRowAnimationNone];
 }
 
+#pragma mark - 拍照图片后执行代理
+#pragma mark UIImagePickerControllerDelegate methods
+- (void)imagePickerController:(UIImagePickerController *)picker didFinishPickingMediaWithInfo:(NSDictionary *)info
+{
+    UIImage *chosenImage = info[UIImagePickerControllerOriginalImage];
+    
+    [self dismissViewControllerAnimated:YES completion:^{
+        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerSendImage:)]) {
+            [self.delegate imagePickerSheetViewControllerSendImage:chosenImage];
+        }
+        [self dismiss];
+    }];
+    
+}
+
+- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker
+{
+    [self dismissViewControllerAnimated:YES completion:^{
+        [self dismiss];
+    }];
+}
+
 #pragma mark - ImagePickerViewDelegate
 /** 相册按钮 */
 - (void)imagePickerViewPhotoLibrary
 {
-    [self dismiss:^{
-        NSLog(@"打开相册");
-        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerOpenPhtotLabrary)]) {
+    NSLog(@"打开相册");
+    if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerOpenPhtotLabrary)]) {
+        [self dismiss:^{
             [self.delegate imagePickerSheetViewControllerOpenPhtotLabrary];
-        }
-    }];
+        }];
+    } else {
+        /** 打开原生相册 */
+        [self hideView:^{            
+            UIImagePickerController *picker = [[UIImagePickerController alloc] init];
+            [picker setAllowsEditing:NO];
+            picker.delegate = self;
+            picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
+            picker.mediaTypes = [[NSArray alloc] initWithObjects: (NSString *) kUTTypeImage, nil];
+            picker.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
+            [self presentViewController:picker animated:YES completion:nil];
+        }];
+    }
 }
 /** 照相按钮 */
 - (void)imagePickerViewTakePhoto
 {
-    [self dismiss:^{
+    if (![UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypeCamera]) {
+        
+        UIAlertView *myAlertView = [[UIAlertView alloc] initWithTitle:@"Error"
+                                                              message:@"Device has no camera"
+                                                             delegate:nil
+                                                    cancelButtonTitle:@"OK"
+                                                    otherButtonTitles: nil];
+        
+        [myAlertView show];
+        
+    } else {
         NSLog(@"打开相机");
         if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerTakePhtot)]) {
-            [self.delegate imagePickerSheetViewControllerTakePhtot];
+            [self dismiss:^{
+                [self.delegate imagePickerSheetViewControllerTakePhtot];
+            }];
+        } else {
+            /** 打开原生相机 */
+            [self hideView:^{
+                UIImagePickerControllerSourceType srcType = UIImagePickerControllerSourceTypeCamera;
+                UIImagePickerController *mediaPickerController = [[UIImagePickerController alloc] init];
+                mediaPickerController.sourceType = srcType;
+                mediaPickerController.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
+                mediaPickerController.delegate = self;
+                mediaPickerController.mediaTypes = [[NSArray alloc] initWithObjects: (NSString *) kUTTypeImage, nil];
+                [self presentViewController:mediaPickerController animated:YES completion:^{
+                    
+                    if([[[UIDevice currentDevice] systemVersion] floatValue] >= 7.0)
+                    {
+                        AVAuthorizationStatus authStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
+                        if (authStatus != AVAuthorizationStatusAuthorized)
+                        {
+                            UIAlertView *prompt = [[UIAlertView alloc] initWithTitle:nil message:@"请在iPhone的“设置-隐私-相机”选项中，允许本应用访问你的相机" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
+                            [prompt show];
+                        }
+                    }
+                }];
+            }];
         }
-    }];
+    }
 }
+
 /** 取消按钮 */
 - (void)imagePickerViewCancel
 {
