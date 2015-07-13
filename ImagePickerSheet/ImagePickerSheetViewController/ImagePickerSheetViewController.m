@@ -440,6 +440,9 @@
 {
     [self dismiss:^{
         NSLog(@"打开相册");
+        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerOpenPhtotLabrary)]) {
+            [self.delegate imagePickerSheetViewControllerOpenPhtotLabrary];
+        }
     }];
 }
 /** 照相按钮 */
@@ -447,6 +450,9 @@
 {
     [self dismiss:^{
         NSLog(@"打开相机");
+        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerTakePhtot)]) {
+            [self.delegate imagePickerSheetViewControllerTakePhtot];
+        }
     }];
 }
 /** 取消按钮 */
@@ -460,10 +466,10 @@
 {
     [self dismiss:^{
         NSLog(@"发送%ld张图片", _selectedImageIndices.count);
-        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewController:image:)]) {
+        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerSendImage:)]) {
             [_selectedImageIndices enumerateObjectsUsingBlock:^(ALAsset *asset, NSUInteger idx, BOOL *stop) {
                 UIImage *image = [UIImage imageWithCGImage:[[asset defaultRepresentation] fullScreenImage]];
-                [self.delegate imagePickerSheetViewController:self image:image];
+                [self.delegate imagePickerSheetViewControllerSendImage:image];
             }];
         }
     }];

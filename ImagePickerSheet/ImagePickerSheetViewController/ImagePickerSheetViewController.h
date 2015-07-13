@@ -12,7 +12,11 @@
 
 @protocol ImagePickerSheetViewControllerDelegate <NSObject>
 /** 发送 */
-- (void)imagePickerSheetViewController:(ImagePickerSheetViewController *)imagePickerSheetVC image:(UIImage *)image;
+- (void)imagePickerSheetViewControllerSendImage:(UIImage *)image;
+/** 相册 */
+- (void)imagePickerSheetViewControllerOpenPhtotLabrary;
+/** 拍照 */
+- (void)imagePickerSheetViewControllerTakePhtot;
 @end
 
 @interface ImagePickerSheetViewController : UIViewController
