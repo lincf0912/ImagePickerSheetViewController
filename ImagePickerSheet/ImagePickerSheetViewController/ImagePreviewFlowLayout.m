@@ -80,18 +80,19 @@
 {
     NSMutableArray *arrays = [NSMutableArray array];
     /** 过滤 */
-    [layoutAttributes enumerateObjectsUsingBlock:^(UICollectionViewLayoutAttributes *attributes, NSUInteger idx, BOOL *stop) {
+    for (UICollectionViewLayoutAttributes *attributes in layoutAttributes) {
         if (CGRectIntersectsRect(rect, attributes.frame)) {
             [arrays addObject:attributes];
         }
-    }];
+    }
     
     NSMutableArray *answer = [NSMutableArray array];
-    [arrays enumerateObjectsUsingBlock:^(UICollectionViewLayoutAttributes *attributes, NSUInteger idx, BOOL *stop) {
+    
+    for (UICollectionViewLayoutAttributes *attributes in arrays) {
         [answer addObject:attributes];
         UICollectionViewLayoutAttributes *supplementaryAttributes = [self layoutAttributesForSupplementaryViewOfKind:UICollectionElementKindSectionHeader atIndexPath:attributes.indexPath];
         [answer addObject:supplementaryAttributes];
-    }];
+    }
     
     return answer;
 }
@@ -141,7 +142,9 @@
     UICollectionViewLayoutAttributes *attributes = [UICollectionViewLayoutAttributes layoutAttributesForSupplementaryViewOfKind:elementKind withIndexPath:indexPath];
     
     attributes.zIndex = 1;
-    attributes.hidden = !self.showSupplementaryViews;
+//#warning 临时代码 start
+//    attributes.hidden = !self.showSupplementaryViews;
+//#warning 临时代码 end
     attributes.frame = (CGRect){{originX, CGRectGetMinY(itemAttributes.frame)}, size};
     
     return attributes;

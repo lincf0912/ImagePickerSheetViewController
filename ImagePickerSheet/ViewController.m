@@ -8,6 +8,7 @@
 
 #import "ViewController.h"
 #import "ImagePickerSheetViewController.h"
+#import "TZImageManager.h"
 
 @interface ViewController ()
 {
@@ -27,6 +28,11 @@
     /** 给view添加一个手势监测 */
     singleTapRecognizer.enabled = NO;
     [self.view addGestureRecognizer:singleTapRecognizer];
+    
+    /** 触发允许使用照片 */
+    [[TZImageManager assetLibrary] enumerateGroupsWithTypes:ALAssetsGroupSavedPhotos
+                                                 usingBlock:nil
+                                               failureBlock:nil];
 }
 
 - (void)viewWillAppear:(BOOL)animated

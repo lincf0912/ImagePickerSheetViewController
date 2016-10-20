@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		6F1DC4EC1DB8561D00979C6B /* TZAssetModel.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F1DC4E91DB8561D00979C6B /* TZAssetModel.m */; };
+		6F1DC4ED1DB8561D00979C6B /* TZImageManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F1DC4EB1DB8561D00979C6B /* TZImageManager.m */; };
+		6F1DC4F11DB856C500979C6B /* UIImage+Compress.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F1DC4F01DB856C500979C6B /* UIImage+Compress.m */; };
+		6F1DC4F41DB857CB00979C6B /* AssetsLibrary.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6F1DC4F31DB857CB00979C6B /* AssetsLibrary.framework */; };
+		6F1DC4F71DB858BD00979C6B /* UIImage+Addition.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F1DC4F61DB858BD00979C6B /* UIImage+Addition.m */; };
+		6F1DC4FA1DB85AEE00979C6B /* UIAlertView+Block.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F1DC4F91DB85AEE00979C6B /* UIAlertView+Block.m */; };
+		6F1DC4FD1DB85DA100979C6B /* NSDate+Millisecond.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F1DC4FC1DB85DA100979C6B /* NSDate+Millisecond.m */; };
 		6F81014B1B4CD5A000BF3C13 /* ImagePreviewFlowLayout.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F81014A1B4CD5A000BF3C13 /* ImagePreviewFlowLayout.m */; };
 		6FCCA3431B4FB60C00EE9913 /* ImageTableViewCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 6FCCA3421B4FB60C00EE9913 /* ImageTableViewCell.m */; };
 		6FCCA3461B4FC82200EE9913 /* ImagePickerCollectionView.m in Sources */ = {isa = PBXBuildFile; fileRef = 6FCCA3451B4FC82200EE9913 /* ImagePickerCollectionView.m */; };
@@ -34,6 +41,19 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		6F1DC4E81DB8561D00979C6B /* TZAssetModel.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TZAssetModel.h; sourceTree = "<group>"; };
+		6F1DC4E91DB8561D00979C6B /* TZAssetModel.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TZAssetModel.m; sourceTree = "<group>"; };
+		6F1DC4EA1DB8561D00979C6B /* TZImageManager.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = TZImageManager.h; sourceTree = "<group>"; };
+		6F1DC4EB1DB8561D00979C6B /* TZImageManager.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = TZImageManager.m; sourceTree = "<group>"; };
+		6F1DC4EF1DB856C500979C6B /* UIImage+Compress.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "UIImage+Compress.h"; sourceTree = "<group>"; };
+		6F1DC4F01DB856C500979C6B /* UIImage+Compress.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "UIImage+Compress.m"; sourceTree = "<group>"; };
+		6F1DC4F31DB857CB00979C6B /* AssetsLibrary.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AssetsLibrary.framework; path = System/Library/Frameworks/AssetsLibrary.framework; sourceTree = SDKROOT; };
+		6F1DC4F51DB858BD00979C6B /* UIImage+Addition.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "UIImage+Addition.h"; sourceTree = "<group>"; };
+		6F1DC4F61DB858BD00979C6B /* UIImage+Addition.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "UIImage+Addition.m"; sourceTree = "<group>"; };
+		6F1DC4F81DB85AEE00979C6B /* UIAlertView+Block.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "UIAlertView+Block.h"; sourceTree = "<group>"; };
+		6F1DC4F91DB85AEE00979C6B /* UIAlertView+Block.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "UIAlertView+Block.m"; sourceTree = "<group>"; };
+		6F1DC4FB1DB85DA100979C6B /* NSDate+Millisecond.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = "NSDate+Millisecond.h"; sourceTree = "<group>"; };
+		6F1DC4FC1DB85DA100979C6B /* NSDate+Millisecond.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSDate+Millisecond.m"; sourceTree = "<group>"; };
 		6F8101491B4CD5A000BF3C13 /* ImagePreviewFlowLayout.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ImagePreviewFlowLayout.h; sourceTree = "<group>"; };
 		6F81014A1B4CD5A000BF3C13 /* ImagePreviewFlowLayout.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ImagePreviewFlowLayout.m; sourceTree = "<group>"; };
 		6FCCA33D1B4E06BB00EE9913 /* DefineHeader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DefineHeader.h; sourceTree = "<group>"; };
@@ -68,6 +88,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6F1DC4F41DB857CB00979C6B /* AssetsLibrary.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -81,12 +102,47 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		6F1DC4E71DB8561D00979C6B /* TZImageManager */ = {
+			isa = PBXGroup;
+			children = (
+				6F1DC4E81DB8561D00979C6B /* TZAssetModel.h */,
+				6F1DC4E91DB8561D00979C6B /* TZAssetModel.m */,
+				6F1DC4EA1DB8561D00979C6B /* TZImageManager.h */,
+				6F1DC4EB1DB8561D00979C6B /* TZImageManager.m */,
+			);
+			path = TZImageManager;
+			sourceTree = "<group>";
+		};
+		6F1DC4EE1DB856C500979C6B /* Category */ = {
+			isa = PBXGroup;
+			children = (
+				6F1DC4EF1DB856C500979C6B /* UIImage+Compress.h */,
+				6F1DC4F01DB856C500979C6B /* UIImage+Compress.m */,
+				6F1DC4F51DB858BD00979C6B /* UIImage+Addition.h */,
+				6F1DC4F61DB858BD00979C6B /* UIImage+Addition.m */,
+				6F1DC4F81DB85AEE00979C6B /* UIAlertView+Block.h */,
+				6F1DC4F91DB85AEE00979C6B /* UIAlertView+Block.m */,
+				6F1DC4FB1DB85DA100979C6B /* NSDate+Millisecond.h */,
+				6F1DC4FC1DB85DA100979C6B /* NSDate+Millisecond.m */,
+			);
+			path = Category;
+			sourceTree = "<group>";
+		};
+		6F1DC4F21DB857CB00979C6B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				6F1DC4F31DB857CB00979C6B /* AssetsLibrary.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		6FD4AE461B4BCD4400801864 = {
 			isa = PBXGroup;
 			children = (
 				6FD4AE511B4BCD4400801864 /* ImagePickerSheet */,
 				6FD4AE6B1B4BCD4400801864 /* ImagePickerSheetTests */,
 				6FD4AE501B4BCD4400801864 /* Products */,
+				6F1DC4F21DB857CB00979C6B /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -102,6 +158,8 @@
 		6FD4AE511B4BCD4400801864 /* ImagePickerSheet */ = {
 			isa = PBXGroup;
 			children = (
+				6F1DC4EE1DB856C500979C6B /* Category */,
+				6F1DC4E71DB8561D00979C6B /* TZImageManager */,
 				6FD4AE781B4BCE9A00801864 /* ImagePickerSheetViewController */,
 				6FD4AE561B4BCD4400801864 /* AppDelegate.h */,
 				6FD4AE571B4BCD4400801864 /* AppDelegate.m */,
@@ -264,10 +322,16 @@
 			buildActionMask = 2147483647;
 			files = (
 				6FD4AE7B1B4BCEBA00801864 /* ImagePickerSheetViewController.m in Sources */,
+				6F1DC4F11DB856C500979C6B /* UIImage+Compress.m in Sources */,
+				6F1DC4F71DB858BD00979C6B /* UIImage+Addition.m in Sources */,
 				6F81014B1B4CD5A000BF3C13 /* ImagePreviewFlowLayout.m in Sources */,
+				6F1DC4EC1DB8561D00979C6B /* TZAssetModel.m in Sources */,
 				6FD4AE5B1B4BCD4400801864 /* ViewController.m in Sources */,
+				6F1DC4FD1DB85DA100979C6B /* NSDate+Millisecond.m in Sources */,
 				6FCCA3461B4FC82200EE9913 /* ImagePickerCollectionView.m in Sources */,
+				6F1DC4FA1DB85AEE00979C6B /* UIAlertView+Block.m in Sources */,
 				6FCCA3431B4FB60C00EE9913 /* ImageTableViewCell.m in Sources */,
+				6F1DC4ED1DB8561D00979C6B /* TZImageManager.m in Sources */,
 				6FD4AE581B4BCD4400801864 /* AppDelegate.m in Sources */,
 				6FD4AE871B4CAC9A00801864 /* ImageCollectionViewCell.m in Sources */,
 				6FD4AE551B4BCD4400801864 /* main.m in Sources */,

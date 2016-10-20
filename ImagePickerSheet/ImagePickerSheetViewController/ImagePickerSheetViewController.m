@@ -12,12 +12,18 @@
 #import "ImageTableViewCell.h"
 #import "PreviewSupplementaryView.h"
 #import "ImagePreviewFlowLayout.h"
-#import <AssetsLibrary/AssetsLibrary.h>
 #import "DefineHeader.h"
 
 #import <AVFoundation/AVFoundation.h>
 #import <MobileCoreServices/UTCoreTypes.h>
 
+#import "TZImageManager.h"
+#import "TZAssetModel.h"
+
+#import "UIAlertView+Block.h"
+#import "NSDate+Millisecond.h"
+
+#define WeakSelf __weak typeof(self) weakSelf = self;
 
 @interface ImagePickerSheetViewController () <UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout, UITableViewDelegate, UITableViewDataSource, UINavigationControllerDelegate, UIImagePickerControllerDelegate>
 {
@@ -25,11 +31,15 @@
     BOOL enlargedPreviews;
     /** tableView数据 */
     NSArray *actions;
+    /** 相册组 */
+    ALAssetsGroup *assetsGroup;
 }
 /** 原始窗口 */
 @property (nonatomic, strong) UIWindow *window;
 /** 透明背景，用于点击销毁界面 */
 @property (nonatomic, strong) UIView *backgroundView;
+/** 屏幕截图 */
+//@property (nonatomic, strong) UIImageView *backgroundImageView;
 /** 图片显示 */
 @property (nonatomic, strong) ImagePickerCollectionView *collectionView;
 /** 按钮显示 */
@@ -56,6 +66,10 @@
 /** 选择图片启动 */
 @property (readwrite) bool isClickImage;
 
+/** 缩略图数组 */
+@property (nonatomic, strong) NSMutableArray *thumbnailImageIndices;
+/** 原图数组 */
+@property (nonatomic, strong) NSMutableArray *originalImageIndices;
 @end
 
 @implementation ImagePickerSheetViewController
@@ -63,8 +77,12 @@
 - (id)init {
     self = [super init];
     if (self) {
-        self.assets = [[NSMutableArray alloc] init];
-        [self setupView];
+        _assets = [[NSMutableArray alloc] init];
+        _selectedImageIndices = [@[] mutableCopy];
+        _originalImageIndices = [@[] mutableCopy];
+        _thumbnailImageIndices = [@[] mutableCopy];
+        _supplementaryViews = [NSMutableDictionary dictionary];
+        self.maximumNumberOfSelection = 10;
     }
     return self;
 }
@@ -72,9 +90,14 @@
 #pragma makr - 设置显示UI
 - (void)setupView {
     self.view.backgroundColor = [UIColor clearColor];
-    self.window = [UIApplication sharedApplication].keyWindow;
+    
+    self.window = [[[UIApplication sharedApplication] delegate] window];
     
     CGFloat tableViewHeight = actions.count * tableViewCellHeight + tableViewPreviewRowHeight;
+/** warning 临时代码 start*/
+    enlargedPreviews = YES;
+    tableViewHeight = actions.count * tableViewCellHeight + tableViewEnlargedPreviewRowHeight;
+/** warning 临时代码 end*/
     self.imagePickerFrame = CGRectMake(0, ScreenHeight-tableViewHeight, ScreenWidth, tableViewHeight);
     self.hiddenFrame = CGRectMake(0, ScreenHeight, ScreenWidth, tableViewHeight);
     
@@ -82,21 +105,31 @@
     self.tableView.delegate = self;
     self.tableView.dataSource = self;
     self.tableView.alwaysBounceVertical = NO;
-    self.tableView.layoutMargins = UIEdgeInsetsZero;
-    self.tableView.separatorInset = UIEdgeInsetsZero;
+    
     [self.tableView registerClass:[ImageTableViewCell class] forCellReuseIdentifier:[ImageTableViewCell identifier]];
+    if ([self.tableView respondsToSelector:@selector(setLayoutMargins:)]) {
+        self.tableView.layoutMargins = UIEdgeInsetsZero;
+    }
+    if ([self.tableView respondsToSelector:@selector(setSeparatorInset:)]) {
+        self.tableView.separatorInset = UIEdgeInsetsZero;
+    }
     
     self.backgroundView = [[UIView alloc] initWithFrame:[UIScreen mainScreen].bounds];
     self.backgroundView.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.3961];
-    UITapGestureRecognizer *dismissTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismiss)];
     self.backgroundView.userInteractionEnabled = YES;
-    [self.backgroundView addGestureRecognizer:dismissTap];
-    
-    
+
+//    UIGraphicsBeginImageContextWithOptions(self.window.frame.size, self.window.opaque, self.window.screen.scale);
+//    [self.window.layer renderInContext:UIGraphicsGetCurrentContext()];
+//    UIImage *backgroundImage = UIGraphicsGetImageFromCurrentImageContext();
+//    UIGraphicsEndImageContext();
+//    self.backgroundImageView = [[UIImageView alloc] initWithFrame:[UIScreen mainScreen].bounds];
+//    [self.backgroundImageView setImage:backgroundImage];
     self.animationTime = 0.2;
     
     [self.window addSubview:self.backgroundView];
     [self.window addSubview:self.tableView];
+//    [self.window addSubview:self.backgroundImageView];
+//    [self.window sendSubviewToBack:self.backgroundImageView];
 }
 
 - (void)viewDidLayoutSubviews
@@ -111,12 +144,15 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     // Do any additional setup after loading the view.
-//    [self createCollectionView];
-    
-    [self getCameraRollImages];
-    
     
     actions = @[kPhotoBtnTitle, kCameraBtnTitle, kCancelBtnTitle];
+    [self setupView];
+    [self reloadImagesFromLibrary];
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
 }
 
 - (void)dealloc
@@ -128,6 +164,47 @@
     [super didReceiveMemoryWarning];
     // Dispose of any resources that can be recreated.
 }
+
+#pragma mark - 获取相册的所有图片
+- (void)reloadImagesFromLibrary
+{
+    if (![TZImageManager authorizationStatusAuthorized]) {
+        NSString *appName = [[NSBundle mainBundle].infoDictionary valueForKey:@"CFBundleDisplayName"];
+        if (!appName) appName = [[NSBundle mainBundle].infoDictionary valueForKey:@"CFBundleName"];
+        NSString *msg = [NSString stringWithFormat:@"请在%@的\"设置-隐私-照片\"选项中，\r允许%@访问你的手机相册。",[UIDevice currentDevice].model,appName];
+        WeakSelf
+        UIAlertView *alertView = [[UIAlertView alloc] initWithTitle:@"相册访问失败" message:msg cancelButtonTitle:@"确定" otherButtonTitles:nil block:^(UIAlertView *alertView, NSInteger buttonIndex) {
+            [weakSelf dismiss];
+            
+        }];
+        [alertView show];
+    } else {
+        WeakSelf
+        long long start = [NSDate timeMillisecondSince1970];
+        [TZImageManager getCameraRollAlbum:NO fetchLimit:kMaxNum ascending:NO completion:^(TZAlbumModel *model) {
+            long long end1 = [NSDate timeMillisecondSince1970];
+            NSLog(@"相册加载耗时：%lld毫秒", end1 - start);
+            if (!weakSelf) return ;
+            /** iOS8之后 获取相册的顺序已经为倒序，获取相册内的图片，要使用顺序获取，否则负负得正 */
+            BOOL ascending = IOS8_OR_LATER ? YES : NO;
+            /** 优化获取数据源，分批次获取 */
+            [TZImageManager getAssetsFromFetchResult:model.result allowPickingVideo:NO fetchLimit:kMaxNum ascending:ascending completion:^void(NSArray<TZAssetModel *> *models) {
+                
+                [self.assets addObjectsFromArray:models];
+                
+                if (self.assets.count == 0) {
+                    [self imagePickerViewPhotoLibrary];
+                } else {
+                    [self.collectionView reloadData];
+                }
+                
+                long long end = [NSDate timeMillisecondSince1970];
+                NSLog(@"%d张图片加载耗时：%lld毫秒", kMaxNum, end - start);
+            }];
+        }];
+    }
+}
+
 
 #pragma mark - 创建collectionView
 - (ImagePickerCollectionView *)collectionView
@@ -148,74 +225,49 @@
     return _collectionView;
 }
 
-#pragma mark - 获取相册数据
-- (void)getCameraRollImages {
-    _assets = [@[] mutableCopy];
-    _selectedImageIndices = [@[] mutableCopy];
-    _supplementaryViews = [NSMutableDictionary dictionary];
-//    __block NSMutableArray *tmpAssets = [@[] mutableCopy];
-    ALAssetsLibrary *assetsLibrary = [[self class] defaultAssetsLibrary];
-    [assetsLibrary enumerateGroupsWithTypes:ALAssetsGroupSavedPhotos usingBlock:^(ALAssetsGroup *group, BOOL *stop) {
-//        [group enumerateAssetsUsingBlock:^(ALAsset *result, NSUInteger index, BOOL *stop) {
-//            if(result)
-//            {
-//                [tmpAssets addObject:result];
-//            }
-//        }];
-        
-        ALAssetsGroupEnumerationResultsBlock assetsEnumerationBlock = ^(ALAsset *result, NSUInteger index, BOOL *stop) {
-            if (result) {
-                if (index > kMaxNum) {
-                    *stop = YES;
-                }
-                [self.assets addObject:result];
-            }
-        };
-        
-        ALAssetsFilter *onlyPhotosFilter = [ALAssetsFilter allPhotos];
-        [group setAssetsFilter:onlyPhotosFilter];
-        [group enumerateAssetsUsingBlock:assetsEnumerationBlock];
-        
-        [self.collectionView reloadData];
-    } failureBlock:^(NSError *error) {
-        NSLog(@"读取相册图片错误：%@", error);
-    }];
-}
-
-+ (ALAssetsLibrary *)defaultAssetsLibrary
-{
-    static dispatch_once_t pred = 0;
-    static ALAssetsLibrary *library = nil;
-    dispatch_once(&pred, ^{
-        library = [[ALAssetsLibrary alloc] init];
-    });
-    return library;
-}
-
 #pragma mark - 启动图片选择器
 - (void)showImagePickerInController:(UIViewController *)controller animated:(BOOL)animated {
+    
     if (self.isVisible != YES) {
         
         self.isVisible = YES;
         
-        self.modalPresentationStyle = UIModalPresentationCustom;
+        if (IOS8_OR_LATER) {
+            self.modalPresentationStyle = UIModalPresentationCustom;
+//            [self.backgroundImageView removeFromSuperview];
+        } else {
+            self.modalPresentationStyle = UIModalPresentationCurrentContext;
+        }
+        
         [controller presentViewController:self animated:NO completion:nil];
+        
         self.backgroundView.alpha = 0;
         if (animated) {
             [UIView animateWithDuration:self.animationTime
-                                  delay:0
+                                  delay:0.f
                                 options:UIViewAnimationOptionCurveLinear
                              animations:^{
                                  [self.tableView setFrame:self.imagePickerFrame];
                                  self.backgroundView.alpha = 0.3961;
                              }
                              completion:^(BOOL finished) {
-                                 
+                                 [self.view addSubview:self.backgroundView];
+                                 [self.view addSubview:self.tableView];
+                                 self.window = nil;
+                                 /** 完成后才添加dismiss手势，避免用户猛点屏幕，UI未能出现就已被dismiss的情况 */
+                                 UITapGestureRecognizer *dismissTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismiss)];
+                                 [self.backgroundView addGestureRecognizer:dismissTap];
                              }];
         } else {
             [self.tableView setFrame:self.imagePickerFrame];
+            self.backgroundView.alpha = 0.3961;
         }
     }
+}
+
+- (void)dismissVC:(BOOL)flag completion:(void (^)(void))completion
+{
+    [self dismiss:completion];
 }
 
 #pragma mark - 销毁图片选择器
@@ -225,11 +277,14 @@
 
 - (void)dismiss:(void (^)(void))completion
 {
+    WeakSelf
     if (self.isVisible == YES) {
         [self hideView:^{
-            [self.tableView removeFromSuperview];
-            [self.backgroundView removeFromSuperview];
-            [self dismissViewControllerAnimated:NO completion:completion];
+            [weakSelf.tableView removeFromSuperview];
+            [weakSelf.backgroundView removeFromSuperview];
+//            [self.backgroundImageView removeFromSuperview];
+            if (weakSelf.dismissBlock) weakSelf.dismissBlock();
+            [self dismissViewControllerAnimated:YES completion:completion];
         }];
         // Set everything to nil
     }
@@ -249,9 +304,10 @@
                      }];
 }
 
-- (CGSize)sizeForAsset:(ALAsset *)asset {
+- (CGSize)sizeForAsset:(TZAssetModel *)model {
     
-    CGSize size = [[asset defaultRepresentation] dimensions];
+    CGSize size = [TZImageManager getPhotoSize:model.asset];
+    
     CGFloat imageWidth = size.width;
     CGFloat imageHeight = size.height;
     
@@ -263,7 +319,14 @@
     CGFloat rowHeight = enlargedPreviews ? tableViewEnlargedPreviewRowHeight : tableViewPreviewRowHeight;
     CGFloat height = rowHeight - 2.0 * collectionViewInset;
     
-    return CGSizeMake(proportion * height, height);
+    CGSize resultSize = CGSizeMake(proportion * height, height);
+    
+    /** 针对长图判断，缩放后，宽度小于最小尺寸，重新调整宽度 */
+    if (resultSize.width < kImageMinMargin) {
+        resultSize.width = kImageMinMargin;
+    }
+    
+    return resultSize;
 }
 #pragma mark - Table view UITableViewDataSource
 - (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
@@ -286,7 +349,9 @@
         ImageTableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:[ImageTableViewCell identifier]];
         
         cell.collectionView = self.collectionView;
-        cell.separatorInset = UIEdgeInsetsMake(0, tableView.bounds.size.width, 0, 0);
+        if ([cell respondsToSelector:@selector(setSeparatorInset:)]) {
+            cell.separatorInset = UIEdgeInsetsMake(0, tableView.bounds.size.width, 0, 0);
+        }
         return cell;
     }
     
@@ -305,7 +370,9 @@
     } else {
         cell.textLabel.text = title;
     }
-    cell.layoutMargins = UIEdgeInsetsZero;
+    if ([cell respondsToSelector:@selector(setLayoutMargins:)]) {
+        cell.layoutMargins = UIEdgeInsetsZero;
+    }
     
     return cell;
 }
@@ -360,11 +427,20 @@
 - (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath {
     ImageCollectionViewCell *cell = [collectionView dequeueReusableCellWithReuseIdentifier:[ImageCollectionViewCell identifier] forIndexPath:indexPath];
     
+//    NSTimeInterval start = [[NSDate date] timeIntervalSince1970];
     /** 倒序显示 */
-    ALAsset *asset = self.assets[self.assets.count-1 - indexPath.section];
-
-    cell.imageView.image = [UIImage imageWithCGImage:[[asset defaultRepresentation] fullResolutionImage]];
+//    ALAsset *asset = self.assets[self.assets.count-1 - indexPath.section];
+    /** 顺序显示 */
+    TZAssetModel *model = self.assets[indexPath.section];
+    [TZImageManager getPhotoWithAsset:model.asset photoWidth:cell.frame.size.width completion:^(UIImage *photo, NSDictionary *info, BOOL isDegraded) {
+//        UIImageView *imageVi = [[UIImageView alloc] initWithFrame:cell.contentView.frame];
+//        imageVi.image = photo;
+//        [cell.contentView addSubview:imageVi];
+        cell.imageView.image = photo;
+    }];
     
+//    NSTimeInterval end = [[NSDate date] timeIntervalSince1970];
+//    NSLog(@"加载第%ldd张图片耗时:%f秒", indexPath.section, end - start);
     return cell;
 }
 
@@ -374,8 +450,9 @@
         PreviewSupplementaryView *supplementaryView = [collectionView dequeueReusableSupplementaryViewOfKind:UICollectionElementKindSectionHeader withReuseIdentifier:[PreviewSupplementaryView identifier] forIndexPath:indexPath];
         supplementaryView.userInteractionEnabled = false;
         supplementaryView.buttonInset = UIEdgeInsetsMake(0.0, kCollectionViewCheckmarkInset, kCollectionViewCheckmarkInset, 0.0);
-        ALAsset *asset = self.assets[self.assets.count-1 - indexPath.section];
-        supplementaryView.selected = [_selectedImageIndices containsObject:asset];
+//        ALAsset *asset = self.assets[self.assets.count-1 - indexPath.section];
+        TZAssetModel *model = self.assets[indexPath.section];
+        supplementaryView.selected = [_selectedImageIndices containsObject:model];
         [_supplementaryViews setObject:supplementaryView forKey:[NSString stringWithFormat:@"%ld", indexPath.section]];
         return supplementaryView;
     }
@@ -386,15 +463,22 @@
 - (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     [collectionView deselectItemAtIndexPath:indexPath animated:NO];
     
-    ALAsset *asset = self.assets[self.assets.count-1 - indexPath.section];
+    TZAssetModel *model = self.assets[indexPath.section];
     
     /** 保存选择数据 */
     PreviewSupplementaryView *supplementaryView = _supplementaryViews[[NSString stringWithFormat:@"%ld", indexPath.section]];
     
     /** 是否选择 */
-    BOOL selected = [_selectedImageIndices containsObject:asset];
+    BOOL selected = [_selectedImageIndices containsObject:model];
     if (!selected) {
-        [_selectedImageIndices addObject:asset];
+        /** 判断是否超过最大值 */
+        if (_selectedImageIndices.count >= _maximumNumberOfSelection) {
+            if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerDidMaximum:)]) {
+                [self.delegate imagePickerSheetViewControllerDidMaximum:_maximumNumberOfSelection];
+            }
+            return;
+        }
+        [_selectedImageIndices addObject:model];
         
         if (!enlargedPreviews) {
             enlargedPreviews = YES;
@@ -417,7 +501,7 @@
             [self reloadButtons];
         }
     } else {
-        [_selectedImageIndices removeObject:asset];
+        [_selectedImageIndices removeObject:model];
         [self reloadButtons];
     }
     
@@ -426,9 +510,10 @@
 
 #pragma mark - UICollectionViewDelegateFlowLayout
 - (CGSize)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout *)collectionViewLayout sizeForItemAtIndexPath:(NSIndexPath *)indexPath {
-    ALAsset *asset = self.assets[self.assets.count-1 - indexPath.section];
     
-    return [self sizeForAsset:asset];
+    TZAssetModel *model = self.assets[indexPath.section];
+    
+    return [self sizeForAsset:model];
 }
 
 - (CGSize)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout*)collectionViewLayout referenceSizeForHeaderInSection:(NSInteger)section
@@ -448,12 +533,21 @@
 #pragma mark UIImagePickerControllerDelegate methods
 - (void)imagePickerController:(UIImagePickerController *)picker didFinishPickingMediaWithInfo:(NSDictionary *)info
 {
-    UIImage *chosenImage = info[UIImagePickerControllerOriginalImage];
-    
-    [self dismissViewControllerAnimated:YES completion:^{
-        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerSendImage:)]) {
-            [self.delegate imagePickerSheetViewControllerSendImage:chosenImage];
+    NSString *mediaType = [info objectForKey:UIImagePickerControllerMediaType];
+    if (picker.sourceType==UIImagePickerControllerSourceTypeCamera && [mediaType isEqualToString:@"public.image"]){
+        UIImage *chosenImage = info[UIImagePickerControllerOriginalImage];
+        /** 拍照发送block */
+        if (self.imagePickerSheetVCPhotoSendImageBlock) {
+            self.imagePickerSheetVCPhotoSendImageBlock(chosenImage);
         }
+        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerPhotoImage:)]) {
+            [self.delegate imagePickerSheetViewControllerPhotoImage:chosenImage];
+        }
+    } else {
+        NSLog(@"Media type:%@" , mediaType);
+    }
+    
+    [super dismissViewControllerAnimated:YES completion:^{
         [self dismiss];
     }];
     
@@ -461,7 +555,7 @@
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker
 {
-    [self dismissViewControllerAnimated:YES completion:^{
+    [super dismissViewControllerAnimated:YES completion:^{
         [self dismiss];
     }];
 }
@@ -477,7 +571,7 @@
         }];
     } else {
         /** 打开原生相册 */
-        [self hideView:^{            
+        [self hideView:^{
             UIImagePickerController *picker = [[UIImagePickerController alloc] init];
             [picker setAllowsEditing:NO];
             picker.delegate = self;
@@ -521,7 +615,7 @@
                     if([[[UIDevice currentDevice] systemVersion] floatValue] >= 7.0)
                     {
                         AVAuthorizationStatus authStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
-                        if (authStatus != AVAuthorizationStatusAuthorized)
+                        if (authStatus ==AVAuthorizationStatusRestricted || authStatus ==AVAuthorizationStatusDenied)
                         {
                             UIAlertView *prompt = [[UIAlertView alloc] initWithTitle:nil message:@"请在iPhone的“设置-隐私-相机”选项中，允许本应用访问你的相机" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
                             [prompt show];
@@ -542,15 +636,37 @@
 /** 发送按钮 */
 - (void)imagePickerViewSendImage
 {
-    [self dismiss:^{
-        NSLog(@"发送%ld张图片", _selectedImageIndices.count);
-        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerSendImage:)]) {
-            [_selectedImageIndices enumerateObjectsUsingBlock:^(ALAsset *asset, NSUInteger idx, BOOL *stop) {
-                UIImage *image = [UIImage imageWithCGImage:[[asset defaultRepresentation] fullScreenImage]];
-                [self.delegate imagePickerSheetViewControllerSendImage:image];
-            }];
-        }
-    }];
+    NSLog(@"发送%ld张图片", _selectedImageIndices.count);
+    
+    NSLog(@"正在处理...");
+    
+    if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerAssets:)]) {
+        [self.delegate imagePickerSheetViewControllerAssets:[_selectedImageIndices copy]];
+    }
+    
+    __weak typeof(self)weakSelf = self;
+    for (int i = 0; i < _selectedImageIndices.count; i ++) {
+        TZAssetModel *model = _selectedImageIndices[i];
+        [_thumbnailImageIndices addObject:@1];
+        [_originalImageIndices addObject:@1];
+        /** 这里发送的是标清图和缩略图，不需要发送原图 */
+        [TZImageManager getPreviewPhotoWithAsset:model.asset completion:^(UIImage *thumbnail, UIImage *source, NSDictionary *info) {
+            if(!weakSelf) return ;
+            if(thumbnail)[weakSelf.thumbnailImageIndices replaceObjectAtIndex:i withObject:thumbnail];
+            if(source)[weakSelf.originalImageIndices replaceObjectAtIndex:i withObject:source];
+            if ([weakSelf.thumbnailImageIndices containsObject:@1]) return;
+            
+            /** imagePickerSheetVCSendImageBlock回调 */
+            if (weakSelf.imagePickerSheetVCSendImageBlock) {
+                weakSelf.imagePickerSheetVCSendImageBlock(weakSelf.thumbnailImageIndices, weakSelf.originalImageIndices);
+            }
+            /** 代理 */
+            if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerThumbnailImages:originalImages:)]) {
+                [weakSelf.delegate imagePickerSheetViewControllerThumbnailImages:weakSelf.thumbnailImageIndices originalImages:weakSelf.originalImageIndices];
+            }
+            
+            [weakSelf dismiss];
+        }];
+    }
 }
-
 @end
