@@ -183,7 +183,7 @@ NSString *const kImageInfoFileByte = @"ImageInfoFileByte";     // 图片大小�
         }
         
         NSInteger end = count;
-        if (fetchLimit > 0 && ascending) { /** 重置结束值 */
+        if (fetchLimit > 0 && ascending == NO) { /** 重置结束值 */
             end = count > fetchLimit ? fetchLimit : count;
         }
         NSIndexSet *indexSet = [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(start, end)];
@@ -214,28 +214,29 @@ NSString *const kImageInfoFileByte = @"ImageInfoFileByte";     // 图片大小�
         ALAssetsGroup *group = (ALAssetsGroup *)result;
         if (!allowPickingVideo) [group setAssetsFilter:[ALAssetsFilter allPhotos]];
         
-        ALAssetsGroupEnumerationResultsBlock resultBlock = ^(id obj, NSUInteger idx, BOOL *stop)
+        ALAssetsGroupEnumerationResultsBlock resultBlock = ^(ALAsset *asset, NSUInteger idx, BOOL *stop)
         {
-            TZAssetModelMediaType type = TZAssetModelMediaTypePhoto;
-            NSString *timeLength = @"";
-            /// Allow picking video
-            if (allowPickingVideo && [[result valueForProperty:ALAssetPropertyType] isEqualToString:ALAssetTypeVideo]) {
-                type = TZAssetModelMediaTypeVideo;
-                NSTimeInterval duration = [[result valueForProperty:ALAssetPropertyDuration] integerValue];
-                timeLength = [self getNewTimeFromDurationSecond:[[NSString stringWithFormat:@"%0.0f",duration] integerValue]];
+            if (asset) {
+                TZAssetModelMediaType type = TZAssetModelMediaTypePhoto;
+                NSString *timeLength = @"";
+                /// Allow picking video
+                if (allowPickingVideo && [[asset valueForProperty:ALAssetPropertyType] isEqualToString:ALAssetTypeVideo]) {
+                    type = TZAssetModelMediaTypeVideo;
+                    NSTimeInterval duration = [[asset valueForProperty:ALAssetPropertyDuration] integerValue];
+                    timeLength = [self getNewTimeFromDurationSecond:[[NSString stringWithFormat:@"%0.0f",duration] integerValue]];
+                }
+                
+                TZAssetModel *model = [TZAssetModel modelWithAsset:asset type:type timeLength:timeLength];
+                if (ascending) {
+                    [photoArr insertObject:model atIndex:0];
+                } else {
+                    [photoArr addObject:model];
+                }
+                
+                if (fetchLimit > 0 && photoArr.count == fetchLimit) {
+                    *stop = YES;
+                }
             }
-            
-            TZAssetModel *model = [TZAssetModel modelWithAsset:result type:type timeLength:timeLength];
-            if (ascending) {
-                [photoArr insertObject:model atIndex:0];
-            } else {
-                [photoArr addObject:model];
-            }
-            
-            if (fetchLimit > 0 && photoArr.count == fetchLimit) {
-                *stop = YES;
-            }
-            
         };
         
         NSUInteger count = group.numberOfAssets;
@@ -246,7 +247,7 @@ NSString *const kImageInfoFileByte = @"ImageInfoFileByte";     // 图片大小�
         }
         
         NSInteger end = count;
-        if (fetchLimit > 0 && ascending) { /** 重置结束值 */
+        if (fetchLimit > 0 && ascending == NO) { /** 重置结束值 */
             end = count > fetchLimit ? fetchLimit : count;
         }
         NSIndexSet *indexSet = [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(start, end)];

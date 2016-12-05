@@ -10,11 +10,12 @@
 		6F1DC4EC1DB8561D00979C6B /* TZAssetModel.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F1DC4E91DB8561D00979C6B /* TZAssetModel.m */; };
 		6F1DC4ED1DB8561D00979C6B /* TZImageManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F1DC4EB1DB8561D00979C6B /* TZImageManager.m */; };
 		6F1DC4F11DB856C500979C6B /* UIImage+Compress.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F1DC4F01DB856C500979C6B /* UIImage+Compress.m */; };
-		6F1DC4F41DB857CB00979C6B /* AssetsLibrary.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6F1DC4F31DB857CB00979C6B /* AssetsLibrary.framework */; };
+		6F1DC4F41DB857CB00979C6B /* AssetsLibrary.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6F1DC4F31DB857CB00979C6B /* AssetsLibrary.framework */; settings = {ATTRIBUTES = (Required, ); }; };
 		6F1DC4F71DB858BD00979C6B /* UIImage+Addition.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F1DC4F61DB858BD00979C6B /* UIImage+Addition.m */; };
 		6F1DC4FA1DB85AEE00979C6B /* UIAlertView+Block.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F1DC4F91DB85AEE00979C6B /* UIAlertView+Block.m */; };
 		6F1DC4FD1DB85DA100979C6B /* NSDate+Millisecond.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F1DC4FC1DB85DA100979C6B /* NSDate+Millisecond.m */; };
 		6F81014B1B4CD5A000BF3C13 /* ImagePreviewFlowLayout.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F81014A1B4CD5A000BF3C13 /* ImagePreviewFlowLayout.m */; };
+		6FB970C51DF53C7F009A493A /* Photos.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6FB970C31DF53C59009A493A /* Photos.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
 		6FCCA3431B4FB60C00EE9913 /* ImageTableViewCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 6FCCA3421B4FB60C00EE9913 /* ImageTableViewCell.m */; };
 		6FCCA3461B4FC82200EE9913 /* ImagePickerCollectionView.m in Sources */ = {isa = PBXBuildFile; fileRef = 6FCCA3451B4FC82200EE9913 /* ImagePickerCollectionView.m */; };
 		6FD4AE551B4BCD4400801864 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 6FD4AE541B4BCD4400801864 /* main.m */; };
@@ -56,6 +57,7 @@
 		6F1DC4FC1DB85DA100979C6B /* NSDate+Millisecond.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = "NSDate+Millisecond.m"; sourceTree = "<group>"; };
 		6F8101491B4CD5A000BF3C13 /* ImagePreviewFlowLayout.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ImagePreviewFlowLayout.h; sourceTree = "<group>"; };
 		6F81014A1B4CD5A000BF3C13 /* ImagePreviewFlowLayout.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ImagePreviewFlowLayout.m; sourceTree = "<group>"; };
+		6FB970C31DF53C59009A493A /* Photos.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Photos.framework; path = System/Library/Frameworks/Photos.framework; sourceTree = SDKROOT; };
 		6FCCA33D1B4E06BB00EE9913 /* DefineHeader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DefineHeader.h; sourceTree = "<group>"; };
 		6FCCA3411B4FB60C00EE9913 /* ImageTableViewCell.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ImageTableViewCell.h; sourceTree = "<group>"; };
 		6FCCA3421B4FB60C00EE9913 /* ImageTableViewCell.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = ImageTableViewCell.m; sourceTree = "<group>"; };
@@ -88,6 +90,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6FB970C51DF53C7F009A493A /* Photos.framework in Frameworks */,
 				6F1DC4F41DB857CB00979C6B /* AssetsLibrary.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -131,6 +134,7 @@
 		6F1DC4F21DB857CB00979C6B /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				6FB970C31DF53C59009A493A /* Photos.framework */,
 				6F1DC4F31DB857CB00979C6B /* AssetsLibrary.framework */,
 			);
 			name = Frameworks;
