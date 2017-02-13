@@ -9,7 +9,7 @@ ImagePickerSheetViewController *imagePicker = [[ImagePickerSheetViewController a
 
 imagePicker.delegate;
 
-强烈推荐实现 imagePickerSheetViewControllerOpenPhtotLabrary 代理 使用TZImagePickerController代替原生相册 效果更佳
+强烈推荐实现 imagePickerSheetViewControllerOpenPhtotLabrary 代理 使用LFImagePickerController代替原生相册 效果更佳
 
 
 
