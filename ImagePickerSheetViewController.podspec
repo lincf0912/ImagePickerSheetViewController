@@ -7,7 +7,7 @@ s.license      = 'MIT'
 s.author       = { 'lincf0912' => 'dayflyking@163.com' }
 s.platform     = :ios
 s.ios.deployment_target = '7.0'
-s.source       = { :git => 'git@github.com:lincf0912/ImagePickerSheetViewController.git', :tag => s.version, :submodules => true }
+s.source       = { :git => 'https://github.com/lincf0912/ImagePickerSheetViewController.git', :tag => s.version, :submodules => true }
 s.requires_arc = true
 s.resources    = 'ImagePickerSheet/ImagePickerSheetViewController/*.bundle'
 s.source_files = 'ImagePickerSheet/ImagePickerSheetViewController/*.{h,m}'
