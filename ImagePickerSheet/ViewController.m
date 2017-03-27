@@ -8,7 +8,7 @@
 
 #import "ViewController.h"
 #import "ImagePickerSheetViewController.h"
-#import "TZImageManager.h"
+#import "LFAssetManager.h"
 
 @interface ViewController ()
 {
@@ -30,7 +30,7 @@
     [self.view addGestureRecognizer:singleTapRecognizer];
     
     /** 触发允许使用照片 */
-    [[TZImageManager assetLibrary] enumerateGroupsWithTypes:ALAssetsGroupSavedPhotos
+    [[LFAssetManager manager].assetLibrary enumerateGroupsWithTypes:ALAssetsGroupSavedPhotos
                                                  usingBlock:nil
                                                failureBlock:nil];
 }

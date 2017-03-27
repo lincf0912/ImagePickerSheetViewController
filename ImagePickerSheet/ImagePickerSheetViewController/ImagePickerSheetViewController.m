@@ -17,22 +17,28 @@
 #import <AVFoundation/AVFoundation.h>
 #import <MobileCoreServices/UTCoreTypes.h>
 
-#import "TZImageManager.h"
-#import "TZAssetModel.h"
+#import "LFImagePickerController.h"
+#import "LFAssetManager.h"
+#import "LFAssetManager+Authorization.h"
 
-#import "UIAlertView+Block.h"
-#import "NSDate+Millisecond.h"
+#import "UIAlertView+LF_Block.h"
 
 #define WeakSelf __weak typeof(self) weakSelf = self;
 
-@interface ImagePickerSheetViewController () <UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout, UITableViewDelegate, UITableViewDataSource, UINavigationControllerDelegate, UIImagePickerControllerDelegate>
+@interface ImagePickerSheetViewController () <UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout, UITableViewDelegate, UITableViewDataSource, UINavigationControllerDelegate, UIImagePickerControllerDelegate, LFImagePickerControllerDelegate>
 {
     /** 显示大图 */
     BOOL enlargedPreviews;
     /** tableView数据 */
     NSArray *actions;
     /** 相册组 */
-    ALAssetsGroup *assetsGroup;
+//    ALAssetsGroup *assetsGroup;
+    
+    UIButton *_progressHUD;
+    UIView *_HUDContainer;
+    UIActivityIndicatorView *_HUDIndicatorView;
+    UILabel *_HUDLabel;
+    
 }
 /** 原始窗口 */
 @property (nonatomic, strong) UIWindow *window;
@@ -168,7 +174,7 @@
 #pragma mark - 获取相册的所有图片
 - (void)reloadImagesFromLibrary
 {
-    if (![TZImageManager authorizationStatusAuthorized]) {
+    if (![[LFAssetManager manager] authorizationStatusAuthorized]) {
         NSString *appName = [[NSBundle mainBundle].infoDictionary valueForKey:@"CFBundleDisplayName"];
         if (!appName) appName = [[NSBundle mainBundle].infoDictionary valueForKey:@"CFBundleName"];
         NSString *msg = [NSString stringWithFormat:@"请在%@的\"设置-隐私-照片\"选项中，\r允许%@访问你的手机相册。",[UIDevice currentDevice].model,appName];
@@ -180,15 +186,15 @@
         [alertView show];
     } else {
         WeakSelf
-        long long start = [NSDate timeMillisecondSince1970];
-        [TZImageManager getCameraRollAlbum:NO fetchLimit:kMaxNum ascending:NO completion:^(TZAlbumModel *model) {
-            long long end1 = [NSDate timeMillisecondSince1970];
+        long long start = [[NSDate date] timeIntervalSince1970] * 1000;
+        [[LFAssetManager manager] getCameraRollAlbum:NO allowPickingImage:YES fetchLimit:kMaxNum ascending:NO completion:^(LFAlbum *model) {
+            long long end1 = [[NSDate date] timeIntervalSince1970] * 1000;
             NSLog(@"相册加载耗时：%lld毫秒", end1 - start);
             if (!weakSelf) return ;
             /** iOS8之后 获取相册的顺序已经为倒序，获取相册内的图片，要使用顺序获取，否则负负得正 */
             BOOL ascending = IOS8_OR_LATER ? YES : NO;
             /** 优化获取数据源，分批次获取 */
-            [TZImageManager getAssetsFromFetchResult:model.result allowPickingVideo:NO fetchLimit:kMaxNum ascending:ascending completion:^void(NSArray<TZAssetModel *> *models) {
+            [[LFAssetManager manager] getAssetsFromFetchResult:model.result allowPickingVideo:NO allowPickingImage:YES fetchLimit:kMaxNum ascending:ascending completion:^(NSArray<LFAsset *> *models) {
                 
                 [self.assets addObjectsFromArray:models];
                 
@@ -198,7 +204,7 @@
                     [self.collectionView reloadData];
                 }
                 
-                long long end = [NSDate timeMillisecondSince1970];
+                long long end = [[NSDate date] timeIntervalSince1970] * 1000;
                 NSLog(@"%d张图片加载耗时：%lld毫秒", kMaxNum, end - start);
             }];
         }];
@@ -292,21 +298,25 @@
 
 - (void)hideView:(void (^)(void))completion
 {
-    [UIView animateWithDuration:self.animationTime
-                          delay:0
-                        options:UIViewAnimationOptionCurveEaseIn
-                     animations:^{
-                         [self.tableView setFrame:self.hiddenFrame];
-                         self.backgroundView.alpha = 0;
-                     }
-                     completion:^(BOOL finished) {
-                         completion();
-                     }];
+    [self hideProgressHUD];
+    /** hideProgressHUD->removeFromSuperview方法影响以下动画，延迟0.1s执行 */
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1f * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [UIView animateWithDuration:self.animationTime
+                              delay:0
+                            options:UIViewAnimationOptionCurveEaseIn
+                         animations:^{
+                             [self.tableView setFrame:self.hiddenFrame];
+                             self.backgroundView.alpha = 0;
+                         }
+                         completion:^(BOOL finished) {
+                             completion();
+                         }];
+    });
 }
 
-- (CGSize)sizeForAsset:(TZAssetModel *)model {
+- (CGSize)sizeForAsset:(LFAsset *)model {
     
-    CGSize size = [TZImageManager getPhotoSize:model.asset];
+    CGSize size = [[LFAssetManager manager] photoSizeWithAsset:model.asset];
     
     CGFloat imageWidth = size.width;
     CGFloat imageHeight = size.height;
@@ -427,19 +437,19 @@
 - (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath {
     ImageCollectionViewCell *cell = [collectionView dequeueReusableCellWithReuseIdentifier:[ImageCollectionViewCell identifier] forIndexPath:indexPath];
     
-//    NSTimeInterval start = [[NSDate date] timeIntervalSince1970];
+//    NSTimeInterval start = [[NSDate date] timeIntervalSince1970] * 1000;
     /** 倒序显示 */
 //    ALAsset *asset = self.assets[self.assets.count-1 - indexPath.section];
     /** 顺序显示 */
-    TZAssetModel *model = self.assets[indexPath.section];
-    [TZImageManager getPhotoWithAsset:model.asset photoWidth:cell.frame.size.width completion:^(UIImage *photo, NSDictionary *info, BOOL isDegraded) {
+    LFAsset *model = self.assets[indexPath.section];
+    [[LFAssetManager manager] getPhotoWithAsset:model.asset photoWidth:cell.frame.size.width completion:^(UIImage *photo, NSDictionary *info, BOOL isDegraded) {
 //        UIImageView *imageVi = [[UIImageView alloc] initWithFrame:cell.contentView.frame];
 //        imageVi.image = photo;
 //        [cell.contentView addSubview:imageVi];
         cell.imageView.image = photo;
     }];
     
-//    NSTimeInterval end = [[NSDate date] timeIntervalSince1970];
+//    NSTimeInterval end = [[NSDate date] timeIntervalSince1970] * 1000;
 //    NSLog(@"加载第%ldd张图片耗时:%f秒", indexPath.section, end - start);
     return cell;
 }
@@ -451,7 +461,7 @@
         supplementaryView.userInteractionEnabled = false;
         supplementaryView.buttonInset = UIEdgeInsetsMake(0.0, kCollectionViewCheckmarkInset, kCollectionViewCheckmarkInset, 0.0);
 //        ALAsset *asset = self.assets[self.assets.count-1 - indexPath.section];
-        TZAssetModel *model = self.assets[indexPath.section];
+        LFAsset *model = self.assets[indexPath.section];
         supplementaryView.selected = [_selectedImageIndices containsObject:model];
         [_supplementaryViews setObject:supplementaryView forKey:[NSString stringWithFormat:@"%ld", indexPath.section]];
         return supplementaryView;
@@ -463,7 +473,7 @@
 - (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     [collectionView deselectItemAtIndexPath:indexPath animated:NO];
     
-    TZAssetModel *model = self.assets[indexPath.section];
+    LFAsset *model = self.assets[indexPath.section];
     
     /** 保存选择数据 */
     PreviewSupplementaryView *supplementaryView = _supplementaryViews[[NSString stringWithFormat:@"%ld", indexPath.section]];
@@ -511,7 +521,7 @@
 #pragma mark - UICollectionViewDelegateFlowLayout
 - (CGSize)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout *)collectionViewLayout sizeForItemAtIndexPath:(NSIndexPath *)indexPath {
     
-    TZAssetModel *model = self.assets[indexPath.section];
+    LFAsset *model = self.assets[indexPath.section];
     
     return [self sizeForAsset:model];
 }
@@ -539,15 +549,14 @@
         /** 拍照发送block */
         if (self.imagePickerSheetVCPhotoSendImageBlock) {
             self.imagePickerSheetVCPhotoSendImageBlock(chosenImage);
-        }
-        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerPhotoImage:)]) {
+        } else if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerPhotoImage:)]) {
             [self.delegate imagePickerSheetViewControllerPhotoImage:chosenImage];
         }
     } else {
         NSLog(@"Media type:%@" , mediaType);
     }
     
-    [super dismissViewControllerAnimated:YES completion:^{
+    [picker dismissViewControllerAnimated:YES completion:^{
         [self dismiss];
     }];
     
@@ -555,9 +564,36 @@
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker
 {
-    [super dismissViewControllerAnimated:YES completion:^{
+    [picker dismissViewControllerAnimated:YES completion:^{
         [self dismiss];
     }];
+}
+
+#pragma mark - LFImagePickerControllerDelegate
+- (void)lf_imagePickerControllerDidCancel:(LFImagePickerController *)picker
+{
+    [self dismiss];
+}
+
+- (void)lf_imagePickerController:(LFImagePickerController *)picker didFinishPickingAssets:(NSArray *)assets
+{
+    if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerAssets:)]) {
+        [self.delegate imagePickerSheetViewControllerAssets:assets];
+    }
+}
+
+- (void)lf_imagePickerController:(LFImagePickerController *)picker didFinishPickingThumbnailImages:(NSArray<UIImage *> *)thumbnailImages originalImages:(NSArray<UIImage *> *)originalImages
+{
+    /** imagePickerSheetVCSendImageBlock回调 */
+    if (self.imagePickerSheetVCSendImageBlock) {
+        self.imagePickerSheetVCSendImageBlock(thumbnailImages, originalImages);
+    } else
+    /** 代理 */
+        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerThumbnailImages:originalImages:)]) {
+            [self.delegate imagePickerSheetViewControllerThumbnailImages:thumbnailImages originalImages:originalImages];
+        }
+    
+    [self dismiss];
 }
 
 #pragma mark - ImagePickerViewDelegate
@@ -570,14 +606,12 @@
             [self.delegate imagePickerSheetViewControllerOpenPhtotLabrary];
         }];
     } else {
-        /** 打开原生相册 */
+        /** 打开内置相册 */
         [self hideView:^{
-            UIImagePickerController *picker = [[UIImagePickerController alloc] init];
-            [picker setAllowsEditing:NO];
-            picker.delegate = self;
-            picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
-            picker.mediaTypes = [[NSArray alloc] initWithObjects: (NSString *) kUTTypeImage, nil];
-            picker.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
+            LFImagePickerController *picker = [[LFImagePickerController alloc] initWithMaxImagesCount:self.maximumNumberOfSelection delegate:self];
+            picker.allowTakePicture = NO;
+            picker.allowPickingVideo = NO;
+            picker.doneBtnTitleStr = @"发送";
             [self presentViewController:picker animated:YES completion:nil];
         }];
     }
@@ -636,37 +670,87 @@
 /** 发送按钮 */
 - (void)imagePickerViewSendImage
 {
+    if (_selectedImageIndices.count == 0) return;
+    [_thumbnailImageIndices removeAllObjects];
+    [_originalImageIndices removeAllObjects];
+    
     NSLog(@"发送%ld张图片", _selectedImageIndices.count);
     
     NSLog(@"正在处理...");
     
-    if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerAssets:)]) {
-        [self.delegate imagePickerSheetViewControllerAssets:[_selectedImageIndices copy]];
-    }
-    
+    [self showProgressHUDText:@"正在处理..."];
     __weak typeof(self)weakSelf = self;
     for (int i = 0; i < _selectedImageIndices.count; i ++) {
-        TZAssetModel *model = _selectedImageIndices[i];
+        LFAsset *model = _selectedImageIndices[i];
         [_thumbnailImageIndices addObject:@1];
         [_originalImageIndices addObject:@1];
         /** 这里发送的是标清图和缩略图，不需要发送原图 */
-        [TZImageManager getPreviewPhotoWithAsset:model.asset completion:^(UIImage *thumbnail, UIImage *source, NSDictionary *info) {
+        [[LFAssetManager manager] getPreviewPhotoWithAsset:model.asset completion:^(UIImage *thumbnail, UIImage *source, NSDictionary *info) {
             if(!weakSelf) return ;
             if(thumbnail)[weakSelf.thumbnailImageIndices replaceObjectAtIndex:i withObject:thumbnail];
             if(source)[weakSelf.originalImageIndices replaceObjectAtIndex:i withObject:source];
             if ([weakSelf.thumbnailImageIndices containsObject:@1]) return;
             
+            if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerAssets:)]) {
+                [weakSelf.delegate imagePickerSheetViewControllerAssets:[weakSelf.selectedImageIndices copy]];
+            }
+            
             /** imagePickerSheetVCSendImageBlock回调 */
             if (weakSelf.imagePickerSheetVCSendImageBlock) {
                 weakSelf.imagePickerSheetVCSendImageBlock(weakSelf.thumbnailImageIndices, weakSelf.originalImageIndices);
-            }
+            } else
             /** 代理 */
-            if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerThumbnailImages:originalImages:)]) {
-                [weakSelf.delegate imagePickerSheetViewControllerThumbnailImages:weakSelf.thumbnailImageIndices originalImages:weakSelf.originalImageIndices];
-            }
+                if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerThumbnailImages:originalImages:)]) {
+                    [weakSelf.delegate imagePickerSheetViewControllerThumbnailImages:weakSelf.thumbnailImageIndices originalImages:weakSelf.originalImageIndices];
+                }
             
             [weakSelf dismiss];
         }];
+    }
+    
+}
+
+/** 弹框 */
+- (void)showProgressHUDText:(NSString *)text
+{
+    [self hideProgressHUD];
+    
+    if (!_progressHUD) {
+        _progressHUD = [UIButton buttonWithType:UIButtonTypeCustom];
+        [_progressHUD setBackgroundColor:[UIColor clearColor]];
+        _progressHUD.frame = [UIScreen mainScreen].bounds;
+        
+        _HUDContainer = [[UIView alloc] init];
+        _HUDContainer.frame = CGRectMake((self.view.frame.size.width - 120) / 2, (self.view.frame.size.height - 90) / 2, 120, 90);
+        _HUDContainer.layer.cornerRadius = 8;
+        _HUDContainer.clipsToBounds = YES;
+        _HUDContainer.backgroundColor = [UIColor darkGrayColor];
+        _HUDContainer.alpha = 0.7;
+        
+        _HUDIndicatorView = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhite];
+        _HUDIndicatorView.frame = CGRectMake(45, 15, 30, 30);
+        
+        _HUDLabel = [[UILabel alloc] init];
+        _HUDLabel.frame = CGRectMake(0,40, 120, 50);
+        _HUDLabel.textAlignment = NSTextAlignmentCenter;
+        _HUDLabel.font = [UIFont systemFontOfSize:15];
+        _HUDLabel.textColor = [UIColor whiteColor];
+        
+        [_HUDContainer addSubview:_HUDLabel];
+        [_HUDContainer addSubview:_HUDIndicatorView];
+        [_progressHUD addSubview:_HUDContainer];
+    }
+    
+    _HUDLabel.text = text;
+    
+    [_HUDIndicatorView startAnimating];
+    [self.view addSubview:_progressHUD];
+}
+
+- (void)hideProgressHUD {
+    if (_progressHUD) {
+        [_HUDIndicatorView stopAnimating];
+        [_progressHUD removeFromSuperview];
     }
 }
 @end

@@ -12,13 +12,13 @@
 
 @protocol ImagePickerSheetViewControllerDelegate <NSObject>
 @optional
-/** 发送 */
+/** 发送(直接回调PHAsset或ALAsset对象) */
 - (void)imagePickerSheetViewControllerAssets:(NSArray *)assets;
 
 /** 发送2（compressImgs缩略图组，originalImgs原图组或者标清）注：也可以实现imagePickerSheetVCSendImageBlock回调 */
 - (void)imagePickerSheetViewControllerThumbnailImages:(NSArray *)compressImgs originalImages:(NSArray *)originalImgs;
 
-/** 拍照发送 住：也可以实现imagePickerSheetVCPhotoSendImageBlock回调*/
+/** 拍照发送 注：也可以实现imagePickerSheetVCPhotoSendImageBlock回调*/
 - (void)imagePickerSheetViewControllerPhotoImage:(UIImage *)image;
 /** 相册 */
 - (void)imagePickerSheetViewControllerOpenPhtotLabrary;

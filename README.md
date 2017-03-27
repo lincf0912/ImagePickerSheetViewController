@@ -5,6 +5,8 @@
 ImagePickerSheetViewController *imagePicker = [[ImagePickerSheetViewController alloc] init];
     [imagePicker showImagePickerInController:self animated:YES];
 
+[imagePicker showImagePickerInController:self animated:YES];
+
 设置代理方法，按钮实现
 
 imagePicker.delegate;
