@@ -370,7 +370,7 @@
     cell.textLabel.font = [UIFont systemFontOfSize:21.f];
     
     if (indexPath.section == 1 && indexPath.row == 0) {
-        cell.textLabel.text = _selectedImageIndices.count > 0 ? [NSString stringWithFormat:@"发送%ld张图片", _selectedImageIndices.count] : title;
+        cell.textLabel.text = _selectedImageIndices.count > 0 ? [NSString stringWithFormat:@"发送%zd张图片", _selectedImageIndices.count] : title;
     } else {
         cell.textLabel.text = title;
     }
@@ -444,7 +444,7 @@
     }];
     
 //    NSTimeInterval end = [[NSDate date] timeIntervalSince1970] * 1000;
-//    NSLog(@"加载第%ldd张图片耗时:%f秒", indexPath.section, end - start);
+//    NSLog(@"加载第%zdd张图片耗时:%f秒", indexPath.section, end - start);
     return cell;
 }
 
@@ -457,7 +457,7 @@
 //        ALAsset *asset = self.assets[self.assets.count-1 - indexPath.section];
         LFAsset *model = self.assets[indexPath.section];
         supplementaryView.selected = [_selectedImageIndices containsObject:model];
-        [_supplementaryViews setObject:supplementaryView forKey:[NSString stringWithFormat:@"%ld", indexPath.section]];
+        [_supplementaryViews setObject:supplementaryView forKey:[NSString stringWithFormat:@"%zd", indexPath.section]];
         return supplementaryView;
     }
     return nil;
@@ -470,7 +470,7 @@
     LFAsset *model = self.assets[indexPath.section];
     
     /** 保存选择数据 */
-    PreviewSupplementaryView *supplementaryView = _supplementaryViews[[NSString stringWithFormat:@"%ld", indexPath.section]];
+    PreviewSupplementaryView *supplementaryView = _supplementaryViews[[NSString stringWithFormat:@"%zd", indexPath.section]];
     
     /** 是否选择 */
     BOOL selected = [_selectedImageIndices containsObject:model];
@@ -673,7 +673,7 @@
     [_thumbnailImageIndices removeAllObjects];
     [_originalImageIndices removeAllObjects];
     
-    NSLog(@"发送%ld张图片", _selectedImageIndices.count);
+    NSLog(@"发送%zd张图片", _selectedImageIndices.count);
     
     NSLog(@"正在处理...");
     

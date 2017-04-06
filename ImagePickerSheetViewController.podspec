@@ -9,9 +9,9 @@ s.platform     = :ios
 s.ios.deployment_target = '7.0'
 s.source       = { :git => 'https://github.com/lincf0912/ImagePickerSheetViewController.git', :tag => s.version, :submodules => true }
 s.requires_arc = true
-s.resources    = 'ImagePickerSheet/ImagePickerSheetViewController/*.bundle'
-s.source_files = 'ImagePickerSheet/ImagePickerSheetViewController/*.{h,m}'
-s.public_header_files = 'ImagePickerSheet/ImagePickerSheetViewController/ImagePickerSheetViewController.h'
+s.resources    = 'ImagePickerSheet/ImagePickerSheet/ImagePickerSheetViewController/*.bundle'
+s.source_files = 'ImagePickerSheet/ImagePickerSheet/ImagePickerSheetViewController/*.{h,m}'
+s.public_header_files = 'ImagePickerSheet/ImagePickerSheet/ImagePickerSheetViewController/ImagePickerSheetViewController.h'
 s.dependency 'LFImagePickerController'
 
 end
