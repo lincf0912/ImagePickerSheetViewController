@@ -9,6 +9,7 @@
 #import "ViewController.h"
 #import "ImagePickerSheetViewController.h"
 #import "LFAssetManager.h"
+#import "LFImagePickerController.h"
 
 @interface ViewController ()
 {
@@ -56,6 +57,11 @@
 {
     NSLog(@"启动图片选择器");
     ImagePickerSheetViewController *imagePicker = [[ImagePickerSheetViewController alloc] init];
+    imagePicker.photoLabrary = ^(LFImagePickerController *lf_imagePicker) {
+        lf_imagePicker.allowTakePicture = NO;
+        lf_imagePicker.allowPickingVideo = NO;
+        lf_imagePicker.doneBtnTitleStr = @"发送";
+    };
     [imagePicker showImagePickerInController:self animated:YES];
 }
 @end

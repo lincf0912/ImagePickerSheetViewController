@@ -21,11 +21,9 @@
 #import "LFAssetManager.h"
 #import "LFAssetManager+Authorization.h"
 
-#import "UIAlertView+LF_Block.h"
-
 #define WeakSelf __weak typeof(self) weakSelf = self;
 
-@interface ImagePickerSheetViewController () <UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout, UITableViewDelegate, UITableViewDataSource, UINavigationControllerDelegate, UIImagePickerControllerDelegate, LFImagePickerControllerDelegate>
+@interface ImagePickerSheetViewController () <UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout, UITableViewDelegate, UITableViewDataSource, UIAlertViewDelegate, UINavigationControllerDelegate, UIImagePickerControllerDelegate, LFImagePickerControllerDelegate>
 {
     /** 显示大图 */
     BOOL enlargedPreviews;
@@ -178,11 +176,7 @@
         NSString *appName = [[NSBundle mainBundle].infoDictionary valueForKey:@"CFBundleDisplayName"];
         if (!appName) appName = [[NSBundle mainBundle].infoDictionary valueForKey:@"CFBundleName"];
         NSString *msg = [NSString stringWithFormat:@"请在%@的\"设置-隐私-照片\"选项中，\r允许%@访问你的手机相册。",[UIDevice currentDevice].model,appName];
-        WeakSelf
-        UIAlertView *alertView = [[UIAlertView alloc] initWithTitle:@"相册访问失败" message:msg cancelButtonTitle:@"确定" otherButtonTitles:nil block:^(UIAlertView *alertView, NSInteger buttonIndex) {
-            [weakSelf dismiss];
-            
-        }];
+        UIAlertView *alertView = [[UIAlertView alloc] initWithTitle:@"相册访问失败" message:msg delegate:self cancelButtonTitle:@"确定" otherButtonTitles:nil];
         [alertView show];
     } else {
         WeakSelf
@@ -601,17 +595,15 @@
 - (void)imagePickerViewPhotoLibrary
 {
     NSLog(@"打开相册");
-    if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerOpenPhtotLabrary)]) {
+    if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerOpenPhotoLabrary)]) {
         [self dismiss:^{
-            [self.delegate imagePickerSheetViewControllerOpenPhtotLabrary];
+            [self.delegate imagePickerSheetViewControllerOpenPhotoLabrary];
         }];
     } else {
         /** 打开内置相册 */
         [self hideView:^{
             LFImagePickerController *picker = [[LFImagePickerController alloc] initWithMaxImagesCount:self.maximumNumberOfSelection delegate:self];
-            picker.allowTakePicture = NO;
-            picker.allowPickingVideo = NO;
-            picker.doneBtnTitleStr = @"发送";
+            if (self.photoLabrary) self.photoLabrary(picker);
             [self presentViewController:picker animated:YES completion:nil];
         }];
     }
@@ -631,9 +623,9 @@
         
     } else {
         NSLog(@"打开相机");
-        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerTakePhtot)]) {
+        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerTakePhoto)]) {
             [self dismiss:^{
-                [self.delegate imagePickerSheetViewControllerTakePhtot];
+                [self.delegate imagePickerSheetViewControllerTakePhoto];
             }];
         } else {
             /** 打开原生相机 */
@@ -667,6 +659,13 @@
     NSLog(@"取消");
     [self dismiss];
 }
+
+#pragma mark - UIAlertViewDelegate
+- (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex
+{
+    [self dismiss];
+}
+
 /** 发送按钮 */
 - (void)imagePickerViewSendImage
 {

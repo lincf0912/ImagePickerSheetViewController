@@ -8,7 +8,7 @@
 
 #import <UIKit/UIKit.h>
 
-@class ImagePickerSheetViewController;
+@class ImagePickerSheetViewController, LFImagePickerController;
 
 @protocol ImagePickerSheetViewControllerDelegate <NSObject>
 @optional
@@ -21,9 +21,9 @@
 /** 拍照发送 注：也可以实现imagePickerSheetVCPhotoSendImageBlock回调*/
 - (void)imagePickerSheetViewControllerPhotoImage:(UIImage *)image;
 /** 相册 */
-- (void)imagePickerSheetViewControllerOpenPhtotLabrary;
+- (void)imagePickerSheetViewControllerOpenPhotoLabrary;
 /** 拍照 */
-- (void)imagePickerSheetViewControllerTakePhtot;
+- (void)imagePickerSheetViewControllerTakePhoto;
 /** 超过最大选择 */
 - (void)imagePickerSheetViewControllerDidMaximum:(NSInteger)maximum;
 @end
@@ -39,6 +39,8 @@
 /** 最大选择数量 */
 @property (nonatomic, assign) NSInteger maximumNumberOfSelection;
 
+/** 使用内置相册回调->设置属性 */
+@property (nonatomic, copy) void (^photoLabrary)(LFImagePickerController *lf_imagePicker);
 /** 销毁回调 */
 @property (nonatomic, copy) void (^dismissBlock)();
 
