@@ -11,7 +11,7 @@
 #import "LFAssetManager.h"
 #import "LFImagePickerController.h"
 
-@interface ViewController ()
+@interface ViewController () <ImagePickerSheetViewControllerDelegate>
 {
     UITapGestureRecognizer *singleTapRecognizer;
 }
@@ -57,11 +57,17 @@
 {
     NSLog(@"启动图片选择器");
     ImagePickerSheetViewController *imagePicker = [[ImagePickerSheetViewController alloc] init];
+    imagePicker.delegate = self;
     imagePicker.photoLabrary = ^(LFImagePickerController *lf_imagePicker) {
         lf_imagePicker.allowTakePicture = NO;
-        lf_imagePicker.allowPickingVideo = NO;
+//        lf_imagePicker.allowPickingVideo = NO;
         lf_imagePicker.doneBtnTitleStr = @"发送";
     };
     [imagePicker showImagePickerInController:self animated:YES];
 }
+
+//- (void)imagePickerSheetViewControllerOpenPhotoLabrary
+//{
+//    NSLog(@"打开第三方框架");
+//}
 @end

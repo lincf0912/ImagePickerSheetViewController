@@ -74,6 +74,10 @@
 @property (nonatomic, strong) NSMutableArray *thumbnailImageIndices;
 /** 原图数组 */
 @property (nonatomic, strong) NSMutableArray *originalImageIndices;
+
+/** 打开内置相册标记 */
+@property (nonatomic, assign) BOOL openLFPhotoPicker;
+
 @end
 
 @implementation ImagePickerSheetViewController
@@ -154,9 +158,12 @@
     [self reloadImagesFromLibrary];
 }
 
-- (void)viewWillAppear:(BOOL)animated
+- (void)viewDidAppear:(BOOL)animated
 {
-    [super viewWillAppear:animated];
+    [super viewDidAppear:animated];
+    if (self.openLFPhotoPicker) {
+        [self dismiss];
+    }
 }
 
 - (void)dealloc
@@ -284,7 +291,7 @@
             [weakSelf.backgroundView removeFromSuperview];
 //            [self.backgroundImageView removeFromSuperview];
             if (weakSelf.dismissBlock) weakSelf.dismissBlock();
-            [self dismissViewControllerAnimated:YES completion:completion];
+            [self dismissViewControllerAnimated:NO completion:completion];
         }];
         // Set everything to nil
     }
@@ -564,14 +571,11 @@
 }
 
 #pragma mark - LFImagePickerControllerDelegate
-- (void)lf_imagePickerControllerDidCancel:(LFImagePickerController *)picker
-{
-    [self dismiss];
-}
-
 - (void)lf_imagePickerController:(LFImagePickerController *)picker didFinishPickingAssets:(NSArray *)assets
 {
-    if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerAssets:)]) {
+    if (self.imagePickerSheetVCSendAssetBlock) {
+        self.imagePickerSheetVCSendAssetBlock(assets);
+    } else if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerAssets:)]) {
         [self.delegate imagePickerSheetViewControllerAssets:assets];
     }
 }
@@ -586,8 +590,6 @@
         if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerThumbnailImages:originalImages:)]) {
             [self.delegate imagePickerSheetViewControllerThumbnailImages:thumbnailImages originalImages:originalImages];
         }
-    
-    [self dismiss];
 }
 
 #pragma mark - ImagePickerViewDelegate
@@ -600,6 +602,8 @@
             [self.delegate imagePickerSheetViewControllerOpenPhotoLabrary];
         }];
     } else {
+        /** 记录打开内置相册，在viewDidAppear 销毁dismiss */
+        self.openLFPhotoPicker = YES;
         /** 打开内置相册 */
         [self hideView:^{
             LFImagePickerController *picker = [[LFImagePickerController alloc] initWithMaxImagesCount:self.maximumNumberOfSelection delegate:self];

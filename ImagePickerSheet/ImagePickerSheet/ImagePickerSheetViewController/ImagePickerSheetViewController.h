@@ -32,6 +32,7 @@
 
 @property (nonatomic, assign) id <ImagePickerSheetViewControllerDelegate> delegate;
 
+@property (nonatomic, copy) void(^imagePickerSheetVCSendAssetBlock)(NSArray *assets);
 /** 发送图片block，回调回两组数组，一组压缩图片数组，一组原图数组 */
 @property (nonatomic, copy) void(^imagePickerSheetVCSendImageBlock)(NSArray *thumbnailImages, NSArray *originalImages);
 /** 拍照发送，回调回图片 */
