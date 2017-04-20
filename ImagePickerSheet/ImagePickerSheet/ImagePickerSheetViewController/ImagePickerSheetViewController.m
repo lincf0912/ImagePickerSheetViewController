@@ -109,7 +109,7 @@
     }
 
     self.showPoint = CGPointMake(0, ScreenHeight-tableViewHeight);
-    self.hiddenPoint = CGPointMake(0, ScreenHeight);
+    self.hiddenPoint = CGPointMake(0, MAX(ScreenWidth, ScreenHeight)); /** 取最大值，适配屏幕方向 */
     
     self.tableView = [[UITableView alloc] initWithFrame:(CGRect){self.hiddenPoint, {ScreenWidth, tableViewHeight}} style:UITableViewStylePlain];
     self.tableView.delegate = self;
@@ -124,7 +124,7 @@
         self.tableView.separatorInset = UIEdgeInsetsZero;
     }
     
-    self.backgroundView = [[UIView alloc] initWithFrame:[UIScreen mainScreen].bounds];
+    self.backgroundView = [[UIView alloc] initWithFrame:self.view.bounds];
     self.backgroundView.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.3961];
     self.backgroundView.userInteractionEnabled = YES;
 
@@ -146,9 +146,15 @@
 {
     [super viewDidLayoutSubviews];
     
+    /** 弹起内置模块不处理tableView的位置 */
+    if (self.openLFPhotoPicker) return;
+    
     CGFloat tableViewPreviewHeight = enlargedPreviews ? tableViewEnlargedPreviewRowHeight : tableViewPreviewRowHeight;
     CGFloat tableViewHeight = actions.count * tableViewCellHeight + tableViewPreviewHeight;
     self.tableView.frame = CGRectMake(CGRectGetMinX(self.view.bounds), CGRectGetMaxY(self.view.bounds)-tableViewHeight, CGRectGetWidth(self.view.bounds), tableViewHeight);
+    self.backgroundView.frame = self.view.bounds;
+    
+    self.showPoint = CGPointMake(0, ScreenHeight-tableViewHeight);
 }
 
 - (void)viewDidLoad {
@@ -568,17 +574,12 @@
         NSLog(@"Media type:%@" , mediaType);
     }
     
-    [picker dismissViewControllerAnimated:YES completion:^{
-        [self dismiss];
-    }];
-    
+    [picker dismissViewControllerAnimated:YES completion:NULL];
 }
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker
 {
-    [picker dismissViewControllerAnimated:YES completion:^{
-        [self dismiss];
-    }];
+    [picker dismissViewControllerAnimated:YES completion:NULL];
 }
 
 #pragma mark - LFImagePickerControllerDelegate
@@ -643,6 +644,8 @@
                 [self.delegate imagePickerSheetViewControllerTakePhoto];
             }];
         } else {
+            /** 记录打开内置相册，在viewDidAppear 销毁dismiss */
+            self.openLFPhotoPicker = YES;
             /** 打开原生相机 */
             [self hideView:^{
                 UIImagePickerControllerSourceType srcType = UIImagePickerControllerSourceTypeCamera;
