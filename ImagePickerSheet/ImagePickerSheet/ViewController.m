@@ -58,6 +58,7 @@
     NSLog(@"启动图片选择器");
     ImagePickerSheetViewController *imagePicker = [[ImagePickerSheetViewController alloc] init];
     imagePicker.delegate = self;
+    imagePicker.zoomAnimited = YES;
     imagePicker.photoLabrary = ^(LFImagePickerController *lf_imagePicker) {
         lf_imagePicker.allowTakePicture = NO;
 //        lf_imagePicker.allowPickingVideo = NO;

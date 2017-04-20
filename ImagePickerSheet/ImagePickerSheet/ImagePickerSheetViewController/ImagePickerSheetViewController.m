@@ -50,9 +50,9 @@
 @property (nonatomic, strong) UITableView *tableView;
 
 /** 显示位置，动画效果 */
-@property (nonatomic) CGRect imagePickerFrame;
+@property (nonatomic) CGPoint showPoint;
 /** 隐藏位置，动画效果 */
-@property (nonatomic) CGRect hiddenFrame;
+@property (nonatomic) CGPoint hiddenPoint;
 /** 动画时间 */
 @property (nonatomic) NSTimeInterval animationTime;
 
@@ -102,14 +102,16 @@
     self.window = [[[UIApplication sharedApplication] delegate] window];
     
     CGFloat tableViewHeight = actions.count * tableViewCellHeight + tableViewPreviewRowHeight;
-/** warning 临时代码 start*/
-    enlargedPreviews = YES;
-    tableViewHeight = actions.count * tableViewCellHeight + tableViewEnlargedPreviewRowHeight;
-/** warning 临时代码 end*/
-    self.imagePickerFrame = CGRectMake(0, ScreenHeight-tableViewHeight, ScreenWidth, tableViewHeight);
-    self.hiddenFrame = CGRectMake(0, ScreenHeight, ScreenWidth, tableViewHeight);
     
-    self.tableView = [[UITableView alloc] initWithFrame:self.hiddenFrame style:UITableViewStylePlain];
+    if (!self.zoomAnimited) {
+        enlargedPreviews = YES;
+        tableViewHeight = actions.count * tableViewCellHeight + tableViewEnlargedPreviewRowHeight;
+    }
+
+    self.showPoint = CGPointMake(0, ScreenHeight-tableViewHeight);
+    self.hiddenPoint = CGPointMake(0, ScreenHeight);
+    
+    self.tableView = [[UITableView alloc] initWithFrame:(CGRect){self.hiddenPoint, {ScreenWidth, tableViewHeight}} style:UITableViewStylePlain];
     self.tableView.delegate = self;
     self.tableView.dataSource = self;
     self.tableView.alwaysBounceVertical = NO;
@@ -221,7 +223,9 @@
         _collectionView = [[ImagePickerCollectionView alloc] initWithFrame:CGRectZero collectionViewLayout:aFlowLayout];
         _collectionView.backgroundColor = [UIColor clearColor];
         _collectionView.imagePreviewLayout.sectionInset = UIEdgeInsetsMake(collectionViewInset, collectionViewInset, collectionViewInset, collectionViewInset);
-        _collectionView.imagePreviewLayout.showSupplementaryViews = NO;
+        if (!self.zoomAnimited) {
+            _collectionView.imagePreviewLayout.showSupplementaryViews = YES;
+        }
         _collectionView.dataSource = self;
         _collectionView.delegate = self;
         _collectionView.showsHorizontalScrollIndicator = NO;
@@ -254,7 +258,9 @@
                                   delay:0.f
                                 options:UIViewAnimationOptionCurveLinear
                              animations:^{
-                                 [self.tableView setFrame:self.imagePickerFrame];
+                                 CGRect rect = self.tableView.frame;
+                                 rect.origin = self.showPoint;
+                                 self.tableView.frame = rect;
                                  self.backgroundView.alpha = 0.3961;
                              }
                              completion:^(BOOL finished) {
@@ -266,7 +272,9 @@
                                  [self.backgroundView addGestureRecognizer:dismissTap];
                              }];
         } else {
-            [self.tableView setFrame:self.imagePickerFrame];
+            CGRect rect = self.tableView.frame;
+            rect.origin = self.showPoint;
+            self.tableView.frame = rect;
             self.backgroundView.alpha = 0.3961;
         }
     }
@@ -300,19 +308,20 @@
 - (void)hideView:(void (^)(void))completion
 {
     [self hideProgressHUD];
-    /** hideProgressHUD->removeFromSuperview方法影响以下动画，延迟0.1s执行 */
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1f * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        [UIView animateWithDuration:self.animationTime
-                              delay:0
-                            options:UIViewAnimationOptionCurveEaseIn
-                         animations:^{
-                             [self.tableView setFrame:self.hiddenFrame];
-                             self.backgroundView.alpha = 0;
-                         }
-                         completion:^(BOOL finished) {
-                             completion();
-                         }];
-    });
+    
+    [UIView animateWithDuration:self.animationTime
+                          delay:0
+                        options:UIViewAnimationOptionCurveEaseIn
+                     animations:^{
+                         [self.view layoutIfNeeded];
+                         CGRect rect = self.tableView.frame;
+                         rect.origin = self.hiddenPoint;
+                         self.tableView.frame = rect;
+                         self.backgroundView.alpha = 0;
+                     }
+                     completion:^(BOOL finished) {
+                         completion();
+                     }];
 }
 
 - (CGSize)sizeForAsset:(LFAsset *)model {
@@ -495,7 +504,7 @@
             enlargedPreviews = YES;
             self.collectionView.imagePreviewLayout.invalidationCenteredIndexPath = indexPath;
             [self.view setNeedsLayout];
-            [UIView animateWithDuration:0.3f animations:^{
+            [UIView animateWithDuration:0.25f animations:^{
                 [self.tableView beginUpdates];
                 [self.tableView endUpdates];
                 [self.view layoutIfNeeded];
@@ -537,7 +546,9 @@
 
 #pragma mark - 刷新tableView
 - (void)reloadButtons {
+    [self.tableView beginUpdates];
     [self.tableView reloadSections:[NSIndexSet indexSetWithIndex:1] withRowAnimation:UITableViewRowAnimationNone];
+    [self.tableView endUpdates];
 }
 
 #pragma mark - 拍照图片后执行代理

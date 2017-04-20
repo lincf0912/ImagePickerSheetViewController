@@ -30,6 +30,9 @@
 
 @interface ImagePickerSheetViewController : UIViewController
 
+/** 首次显示缩放动画 默认NO */
+@property (nonatomic, assign) BOOL zoomAnimited;
+
 @property (nonatomic, assign) id <ImagePickerSheetViewControllerDelegate> delegate;
 
 @property (nonatomic, copy) void(^imagePickerSheetVCSendAssetBlock)(NSArray *assets);

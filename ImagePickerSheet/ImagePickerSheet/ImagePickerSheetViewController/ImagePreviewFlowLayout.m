@@ -142,9 +142,7 @@
     UICollectionViewLayoutAttributes *attributes = [UICollectionViewLayoutAttributes layoutAttributesForSupplementaryViewOfKind:elementKind withIndexPath:indexPath];
     
     attributes.zIndex = 1;
-//#warning 临时代码 start
-//    attributes.hidden = !self.showSupplementaryViews;
-//#warning 临时代码 end
+    attributes.hidden = !self.showSupplementaryViews;
     attributes.frame = (CGRect){{originX, CGRectGetMinY(itemAttributes.frame)}, size};
     
     return attributes;
