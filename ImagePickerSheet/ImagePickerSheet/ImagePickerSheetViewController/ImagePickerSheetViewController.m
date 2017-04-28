@@ -702,7 +702,7 @@
         [_thumbnailImageIndices addObject:@1];
         [_originalImageIndices addObject:@1];
         /** 这里发送的是标清图和缩略图，不需要发送原图 */
-        [[LFAssetManager manager] getPreviewPhotoWithAsset:model.asset completion:^(UIImage *thumbnail, UIImage *source, NSDictionary *info) {
+        [[LFAssetManager manager] getPhotoWithAsset:model.asset isOriginal:NO completion:^(UIImage *thumbnail, UIImage *source, NSDictionary *info) {
             if(!weakSelf) return ;
             if(thumbnail)[weakSelf.thumbnailImageIndices replaceObjectAtIndex:i withObject:thumbnail];
             if(source)[weakSelf.originalImageIndices replaceObjectAtIndex:i withObject:source];
