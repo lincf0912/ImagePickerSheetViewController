@@ -8,6 +8,29 @@
 
 #import <UIKit/UIKit.h>
 
+/**
+ *  NSString;
+ */
+extern NSString *const kImageInfoFileName;     // 图片名称
+/**
+ *  NSValue; CGSize size;[value getValue:&size];
+ */
+extern NSString *const kImageInfoFileSize;     // 图片大小［长、宽］
+/**
+ *  NSNumber(CGFloat);
+ */
+extern NSString *const kImageInfoFileByte;     // 图片大小［字节］
+/**
+ *  NSData;
+ */
+extern NSString *const kImageInfoFileOriginalData;     // 图片数据 原图
+extern NSString *const kImageInfoFileThumnailData;     // 图片数据 缩略图
+/**
+ *  NSNumber(BOOL);
+ */
+extern NSString *const kImageInfoIsGIF;     // 是否GIF
+
+
 @class ImagePickerSheetViewController, LFImagePickerController;
 
 @protocol ImagePickerSheetViewControllerDelegate <NSObject>
@@ -16,7 +39,8 @@
 - (void)imagePickerSheetViewControllerAssets:(NSArray *)assets;
 
 /** 发送2（compressImgs缩略图组，originalImgs原图组或者标清）注：也可以实现imagePickerSheetVCSendImageBlock回调 */
-- (void)imagePickerSheetViewControllerThumbnailImages:(NSArray *)compressImgs originalImages:(NSArray *)originalImgs;
+- (void)imagePickerSheetViewControllerThumbnailImages:(NSArray <UIImage *>*)compressImgs originalImages:(NSArray <UIImage *>*)originalImgs;
+- (void)imagePickerSheetViewControllerThumbnailImages:(NSArray <UIImage *>*)compressImgs originalImages:(NSArray <UIImage *>*)originalImgs infos:(NSArray<NSDictionary *> *)infos;
 
 /** 拍照发送 注：也可以实现imagePickerSheetVCPhotoSendImageBlock回调*/
 - (void)imagePickerSheetViewControllerPhotoImage:(UIImage *)image;
@@ -37,7 +61,8 @@
 
 @property (nonatomic, copy) void(^imagePickerSheetVCSendAssetBlock)(NSArray *assets);
 /** 发送图片block，回调回两组数组，一组压缩图片数组，一组原图数组 */
-@property (nonatomic, copy) void(^imagePickerSheetVCSendImageBlock)(NSArray *thumbnailImages, NSArray *originalImages);
+@property (nonatomic, copy) void(^imagePickerSheetVCSendImageBlock)(NSArray <UIImage *>*thumbnailImages, NSArray <UIImage *>*originalImages);
+@property (nonatomic, copy) void(^imagePickerSheetVCSendImageWithInfoBlock)(NSArray <UIImage *>*thumbnailImages, NSArray <UIImage *>*originalImages, NSArray<NSDictionary *> *infos);
 /** 拍照发送，回调回图片 */
 @property (nonatomic, copy) void (^imagePickerSheetVCPhotoSendImageBlock)(UIImage *image);
 /** 最大选择数量 */

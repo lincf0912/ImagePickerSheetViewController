@@ -74,6 +74,8 @@
 @property (nonatomic, strong) NSMutableArray *thumbnailImageIndices;
 /** 原图数组 */
 @property (nonatomic, strong) NSMutableArray *originalImageIndices;
+/** 信息数组 */
+@property (nonatomic, strong) NSMutableArray *imageInfoIndices;
 
 /** 打开内置相册标记 */
 @property (nonatomic, assign) BOOL openLFPhotoPicker;
@@ -89,6 +91,7 @@
         _selectedImageIndices = [@[] mutableCopy];
         _originalImageIndices = [@[] mutableCopy];
         _thumbnailImageIndices = [@[] mutableCopy];
+        _imageInfoIndices = [@[] mutableCopy];
         _supplementaryViews = [NSMutableDictionary dictionary];
         self.maximumNumberOfSelection = 10;
     }
@@ -203,7 +206,7 @@
             /** iOS8之后 获取相册的顺序已经为倒序，获取相册内的图片，要使用顺序获取，否则负负得正 */
             BOOL ascending = IOS8_OR_LATER ? YES : NO;
             /** 优化获取数据源，分批次获取 */
-            [[LFAssetManager manager] getAssetsFromFetchResult:model.result allowPickingVideo:NO allowPickingImage:YES fetchLimit:kMaxNum ascending:ascending completion:^(NSArray<LFAsset *> *models) {
+            [[LFAssetManager manager] getAssetsFromFetchResult:model.result allowPickingVideo:NO allowPickingImage:YES allowPickingGif:NO fetchLimit:kMaxNum ascending:ascending completion:^(NSArray<LFAsset *> *models) {
                 
                 [self.assets addObjectsFromArray:models];
                 
@@ -690,6 +693,7 @@
     if (_selectedImageIndices.count == 0) return;
     [_thumbnailImageIndices removeAllObjects];
     [_originalImageIndices removeAllObjects];
+    [_imageInfoIndices removeAllObjects];
     
     NSLog(@"发送%zd张图片", _selectedImageIndices.count);
     
@@ -701,14 +705,18 @@
         LFAsset *model = _selectedImageIndices[i];
         [_thumbnailImageIndices addObject:@1];
         [_originalImageIndices addObject:@1];
+        [_imageInfoIndices addObject:@1];
         /** 这里发送的是标清图和缩略图，不需要发送原图 */
         [[LFAssetManager manager] getPhotoWithAsset:model.asset isOriginal:NO completion:^(UIImage *thumbnail, UIImage *source, NSDictionary *info) {
             if(!weakSelf) return ;
             if(thumbnail)[weakSelf.thumbnailImageIndices replaceObjectAtIndex:i withObject:thumbnail];
             if(source)[weakSelf.originalImageIndices replaceObjectAtIndex:i withObject:source];
-            if ([weakSelf.thumbnailImageIndices containsObject:@1]) return;
+            if (info) [weakSelf.imageInfoIndices replaceObjectAtIndex:i withObject:info];
+            if ([weakSelf.originalImageIndices containsObject:@1]) return;
             
-            if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerAssets:)]) {
+            if (weakSelf.imagePickerSheetVCSendAssetBlock) {
+                weakSelf.imagePickerSheetVCSendAssetBlock([weakSelf.selectedImageIndices copy]);
+            } else if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerAssets:)]) {
                 [weakSelf.delegate imagePickerSheetViewControllerAssets:[weakSelf.selectedImageIndices copy]];
             }
             
@@ -719,6 +727,15 @@
             /** 代理 */
                 if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerThumbnailImages:originalImages:)]) {
                     [weakSelf.delegate imagePickerSheetViewControllerThumbnailImages:weakSelf.thumbnailImageIndices originalImages:weakSelf.originalImageIndices];
+                }
+            
+            /** imagePickerSheetVCSendImageBlock回调 */
+            if (weakSelf.imagePickerSheetVCSendImageWithInfoBlock) {
+                weakSelf.imagePickerSheetVCSendImageWithInfoBlock(weakSelf.thumbnailImageIndices, weakSelf.originalImageIndices, weakSelf.imageInfoIndices);
+            } else
+            /** 代理 */
+                if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerThumbnailImages:originalImages:infos:)]) {
+                    [weakSelf.delegate imagePickerSheetViewControllerThumbnailImages:weakSelf.thumbnailImageIndices originalImages:weakSelf.originalImageIndices infos:weakSelf.imageInfoIndices    ];
                 }
             
             [weakSelf dismiss];
