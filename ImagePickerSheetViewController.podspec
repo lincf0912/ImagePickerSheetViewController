@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
 s.name         = 'ImagePickerSheetViewController'
-s.version      = '1.0.5'
+s.version      = '1.0.5.1'
 s.summary      = 'image picker'
 s.homepage     = 'https://github.com/lincf0912/ImagePickerSheetViewController'
 s.license      = 'MIT'
