@@ -595,7 +595,7 @@
     }
 }
 
-- (void)lf_imagePickerController:(LFImagePickerController *)picker didFinishPickingThumbnailImages:(NSArray<UIImage *> *)thumbnailImages originalImages:(NSArray<UIImage *> *)originalImages
+- (void)lf_imagePickerController:(LFImagePickerController *)picker didFinishPickingThumbnailImages:(NSArray<UIImage *> *)thumbnailImages originalImages:(NSArray<UIImage *> *)originalImages infos:(NSArray<NSDictionary *> *)infos
 {
     /** imagePickerSheetVCSendImageBlock回调 */
     if (self.imagePickerSheetVCSendImageBlock) {
@@ -604,6 +604,15 @@
     /** 代理 */
         if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerThumbnailImages:originalImages:)]) {
             [self.delegate imagePickerSheetViewControllerThumbnailImages:thumbnailImages originalImages:originalImages];
+        }
+    
+    /** imagePickerSheetVCSendImageBlock回调 */
+    if (self.imagePickerSheetVCSendImageWithInfoBlock) {
+        self.imagePickerSheetVCSendImageWithInfoBlock(thumbnailImages, originalImages, infos);
+    } else
+    /** 代理 */
+        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerThumbnailImages:originalImages:infos:)]) {
+            [self.delegate imagePickerSheetViewControllerThumbnailImages:thumbnailImages originalImages:originalImages infos:infos];
         }
 }
 
@@ -735,7 +744,7 @@
             } else
             /** 代理 */
                 if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerThumbnailImages:originalImages:infos:)]) {
-                    [weakSelf.delegate imagePickerSheetViewControllerThumbnailImages:weakSelf.thumbnailImageIndices originalImages:weakSelf.originalImageIndices infos:weakSelf.imageInfoIndices    ];
+                    [weakSelf.delegate imagePickerSheetViewControllerThumbnailImages:weakSelf.thumbnailImageIndices originalImages:weakSelf.originalImageIndices infos:weakSelf.imageInfoIndices];
                 }
             
             [weakSelf dismiss];
