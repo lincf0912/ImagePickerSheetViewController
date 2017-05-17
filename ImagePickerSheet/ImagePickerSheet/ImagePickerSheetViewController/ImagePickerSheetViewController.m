@@ -93,7 +93,8 @@
         _thumbnailImageIndices = [@[] mutableCopy];
         _imageInfoIndices = [@[] mutableCopy];
         _supplementaryViews = [NSMutableDictionary dictionary];
-        self.maximumNumberOfSelection = 10;
+        _maximumNumberOfSelection = 10;
+        _fetchLimit = 20;
     }
     return self;
 }
@@ -199,14 +200,14 @@
     } else {
         WeakSelf
         long long start = [[NSDate date] timeIntervalSince1970] * 1000;
-        [[LFAssetManager manager] getCameraRollAlbum:NO allowPickingImage:YES fetchLimit:kMaxNum ascending:NO completion:^(LFAlbum *model) {
+        [[LFAssetManager manager] getCameraRollAlbum:NO allowPickingImage:YES fetchLimit:self.fetchLimit ascending:NO completion:^(LFAlbum *model) {
             long long end1 = [[NSDate date] timeIntervalSince1970] * 1000;
             NSLog(@"相册加载耗时：%lld毫秒", end1 - start);
             if (!weakSelf) return ;
             /** iOS8之后 获取相册的顺序已经为倒序，获取相册内的图片，要使用顺序获取，否则负负得正 */
             BOOL ascending = IOS8_OR_LATER ? YES : NO;
             /** 优化获取数据源，分批次获取 */
-            [[LFAssetManager manager] getAssetsFromFetchResult:model.result allowPickingVideo:NO allowPickingImage:YES allowPickingGif:NO fetchLimit:kMaxNum ascending:ascending completion:^(NSArray<LFAsset *> *models) {
+            [[LFAssetManager manager] getAssetsFromFetchResult:model.result allowPickingVideo:NO allowPickingImage:YES allowPickingGif:NO fetchLimit:self.fetchLimit ascending:ascending completion:^(NSArray<LFAsset *> *models) {
                 
                 [self.assets addObjectsFromArray:models];
                 
@@ -217,7 +218,7 @@
                 }
                 
                 long long end = [[NSDate date] timeIntervalSince1970] * 1000;
-                NSLog(@"%d张图片加载耗时：%lld毫秒", kMaxNum, end - start);
+                NSLog(@"%lu张图片加载耗时：%lld毫秒", (unsigned long)self.fetchLimit, end - start);
             }];
         }];
     }
@@ -446,7 +447,7 @@
 
 - (NSInteger)numberOfSectionsInCollectionView:(UICollectionView *)collectionView {
     /** 最多显示10张 */
-    return MIN(kMaxNum, self.assets.count);
+    return MIN(self.fetchLimit, self.assets.count);
 }
 
 - (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section {

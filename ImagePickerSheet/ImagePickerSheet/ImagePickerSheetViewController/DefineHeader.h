@@ -15,8 +15,7 @@
 #define IOS9_OR_LATER NLSystemVersionGreaterOrEqualThan(9.0)
 
 /** ImagePickerSheetViewController */
-/** 最大显示数量 */
-#define kMaxNum 20
+
 /** 屏幕大小 */
 #define ScreenWidth [UIScreen mainScreen].bounds.size.width
 #define ScreenHeight [UIScreen mainScreen].bounds.size.height

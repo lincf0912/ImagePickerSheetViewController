@@ -67,6 +67,8 @@ extern NSString *const kImageInfoIsGIF;     // 是否GIF
 @property (nonatomic, copy) void (^imagePickerSheetVCPhotoSendImageBlock)(UIImage *image);
 /** 最大选择数量 */
 @property (nonatomic, assign) NSInteger maximumNumberOfSelection;
+/** 显示相册数量，默认20，设置0为全部 */
+@property (nonatomic, assign) NSUInteger fetchLimit;
 
 /** 使用内置相册回调->设置属性 */
 @property (nonatomic, copy) void (^photoLabrary)(LFImagePickerController *lf_imagePicker);
