@@ -7,7 +7,7 @@
 //
 
 #import <UIKit/UIKit.h>
-#import "LFImagePickerPublicHeader.h"
+#import <LFImagePickerController/LFImagePickerPublicHeader.h>
 
 @class ImagePickerSheetViewController, LFImagePickerController;
 
