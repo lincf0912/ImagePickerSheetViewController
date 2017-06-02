@@ -191,6 +191,8 @@
 #pragma mark - 获取相册的所有图片
 - (void)reloadImagesFromLibrary
 {
+    [LFAssetManager manager].shouldFixOrientation = YES;
+    
     if (![[LFAssetManager manager] authorizationStatusAuthorized]) {
         NSString *appName = [[NSBundle mainBundle].infoDictionary valueForKey:@"CFBundleDisplayName"];
         if (!appName) appName = [[NSBundle mainBundle].infoDictionary valueForKey:@"CFBundleName"];
@@ -207,7 +209,7 @@
             /** iOS8之后 获取相册的顺序已经为倒序，获取相册内的图片，要使用顺序获取，否则负负得正 */
             BOOL ascending = IOS8_OR_LATER ? YES : NO;
             /** 优化获取数据源，分批次获取 */
-            [[LFAssetManager manager] getAssetsFromFetchResult:model.result allowPickingVideo:NO allowPickingImage:YES allowPickingGif:NO fetchLimit:self.fetchLimit ascending:ascending completion:^(NSArray<LFAsset *> *models) {
+            [[LFAssetManager manager] getAssetsFromFetchResult:model.result allowPickingVideo:NO allowPickingImage:YES fetchLimit:self.fetchLimit ascending:ascending completion:^(NSArray<LFAsset *> *models) {
                 
                 [self.assets addObjectsFromArray:models];
                 
