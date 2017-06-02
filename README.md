@@ -5,7 +5,7 @@
 ## Installation 安装
 
 * CocoaPods：pod 'ImagePickerSheetViewController'
-* 手动导入：将ImagePickerSheet\ImagePickerSheetViewController文件夹拽入项目中，导入头文件：#import "LFPhotoBrowser.h"，依赖LFImagePickerController
+* 手动导入：将ImagePickerSheet\ImagePickerSheetViewController文件夹拽入项目中，导入头文件：#import "ImagePickerSheetViewController.h"，依赖LFImagePickerController
 
 ## 调用代码
 
