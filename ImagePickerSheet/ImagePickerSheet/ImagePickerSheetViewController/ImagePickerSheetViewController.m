@@ -70,12 +70,8 @@
 /** 选择图片启动 */
 @property (readwrite) bool isClickImage;
 
-/** 缩略图数组 */
-@property (nonatomic, strong) NSMutableArray *thumbnailImageIndices;
-/** 原图数组 */
-@property (nonatomic, strong) NSMutableArray *originalImageIndices;
-/** 信息数组 */
-@property (nonatomic, strong) NSMutableArray *imageInfoIndices;
+/** 结构数组 */
+@property (nonatomic, strong) NSMutableArray *resultIndices;
 
 /** 打开内置相册标记 */
 @property (nonatomic, assign) BOOL openLFPhotoPicker;
@@ -89,9 +85,7 @@
     if (self) {
         _assets = [[NSMutableArray alloc] init];
         _selectedImageIndices = [@[] mutableCopy];
-        _originalImageIndices = [@[] mutableCopy];
-        _thumbnailImageIndices = [@[] mutableCopy];
-        _imageInfoIndices = [@[] mutableCopy];
+        _resultIndices = [@[] mutableCopy];
         _supplementaryViews = [NSMutableDictionary dictionary];
         _maximumNumberOfSelection = 10;
         _fetchLimit = 20;
@@ -589,34 +583,13 @@
 }
 
 #pragma mark - LFImagePickerControllerDelegate
-- (void)lf_imagePickerController:(LFImagePickerController *)picker didFinishPickingAssets:(NSArray *)assets
+- (void)lf_imagePickerController:(LFImagePickerController *)picker didFinishPickingResult:(NSArray <LFResultObject /* <LFResultImage/LFResultVideo> */*> *)results
 {
-    if (self.imagePickerSheetVCSendAssetBlock) {
-        self.imagePickerSheetVCSendAssetBlock(assets);
-    } else if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerAssets:)]) {
-        [self.delegate imagePickerSheetViewControllerAssets:assets];
+    if (self.imagePickerSheetVCSendResultImageBlock) {
+        self.imagePickerSheetVCSendResultImageBlock(results);
+    } else if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerResultImages:)]) {
+        [self.delegate imagePickerSheetViewControllerResultImages:results];
     }
-}
-
-- (void)lf_imagePickerController:(LFImagePickerController *)picker didFinishPickingThumbnailImages:(NSArray<UIImage *> *)thumbnailImages originalImages:(NSArray<UIImage *> *)originalImages infos:(NSArray<NSDictionary *> *)infos
-{
-    /** imagePickerSheetVCSendImageBlock回调 */
-    if (self.imagePickerSheetVCSendImageBlock) {
-        self.imagePickerSheetVCSendImageBlock(thumbnailImages, originalImages);
-    } else
-    /** 代理 */
-        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerThumbnailImages:originalImages:)]) {
-            [self.delegate imagePickerSheetViewControllerThumbnailImages:thumbnailImages originalImages:originalImages];
-        }
-    
-    /** imagePickerSheetVCSendImageBlock回调 */
-    if (self.imagePickerSheetVCSendImageWithInfoBlock) {
-        self.imagePickerSheetVCSendImageWithInfoBlock(thumbnailImages, originalImages, infos);
-    } else
-    /** 代理 */
-        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerThumbnailImages:originalImages:infos:)]) {
-            [self.delegate imagePickerSheetViewControllerThumbnailImages:thumbnailImages originalImages:originalImages infos:infos];
-        }
 }
 
 #pragma mark - ImagePickerViewDelegate
@@ -634,6 +607,7 @@
         /** 打开内置相册 */
         [self hideView:^{
             LFImagePickerController *picker = [[LFImagePickerController alloc] initWithMaxImagesCount:self.maximumNumberOfSelection delegate:self];
+            picker.allowPickingVideo = NO;
             if (self.photoLabrary) self.photoLabrary(picker);
             [self presentViewController:picker animated:YES completion:nil];
         }];
@@ -703,9 +677,7 @@
 - (void)imagePickerViewSendImage
 {
     if (_selectedImageIndices.count == 0) return;
-    [_thumbnailImageIndices removeAllObjects];
-    [_originalImageIndices removeAllObjects];
-    [_imageInfoIndices removeAllObjects];
+    [_resultIndices removeAllObjects];
     
     NSLog(@"发送%zd张图片", _selectedImageIndices.count);
     
@@ -715,40 +687,20 @@
     __weak typeof(self)weakSelf = self;
     for (int i = 0; i < _selectedImageIndices.count; i ++) {
         LFAsset *model = _selectedImageIndices[i];
-        [_thumbnailImageIndices addObject:@1];
-        [_originalImageIndices addObject:@1];
-        [_imageInfoIndices addObject:@1];
+        [_resultIndices addObject:@1];
         /** 这里发送的是标清图和缩略图，不需要发送原图 */
-        [[LFAssetManager manager] getPhotoWithAsset:model.asset isOriginal:NO completion:^(UIImage *thumbnail, UIImage *source, NSDictionary *info) {
+        [[LFAssetManager manager] getPhotoWithAsset:model.asset isOriginal:NO completion:^(LFResultImage *resultImage) {
+            
             if(!weakSelf) return ;
-            if(thumbnail)[weakSelf.thumbnailImageIndices replaceObjectAtIndex:i withObject:thumbnail];
-            if(source)[weakSelf.originalImageIndices replaceObjectAtIndex:i withObject:source];
-            if (info) [weakSelf.imageInfoIndices replaceObjectAtIndex:i withObject:info];
-            if ([weakSelf.originalImageIndices containsObject:@1]) return;
+            if(resultImage)[weakSelf.resultIndices replaceObjectAtIndex:i withObject:resultImage];
             
-            if (weakSelf.imagePickerSheetVCSendAssetBlock) {
-                weakSelf.imagePickerSheetVCSendAssetBlock([weakSelf.selectedImageIndices copy]);
-            } else if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerAssets:)]) {
-                [weakSelf.delegate imagePickerSheetViewControllerAssets:[weakSelf.selectedImageIndices copy]];
+            if ([weakSelf.resultIndices containsObject:@1]) return;
+            
+            if (weakSelf.imagePickerSheetVCSendResultImageBlock) {
+                weakSelf.imagePickerSheetVCSendResultImageBlock([weakSelf.resultIndices copy]);
+            } else if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerResultImages:)]) {
+                [weakSelf.delegate imagePickerSheetViewControllerResultImages:[weakSelf.resultIndices copy]];
             }
-            
-            /** imagePickerSheetVCSendImageBlock回调 */
-            if (weakSelf.imagePickerSheetVCSendImageBlock) {
-                weakSelf.imagePickerSheetVCSendImageBlock(weakSelf.thumbnailImageIndices, weakSelf.originalImageIndices);
-            } else
-            /** 代理 */
-                if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerThumbnailImages:originalImages:)]) {
-                    [weakSelf.delegate imagePickerSheetViewControllerThumbnailImages:weakSelf.thumbnailImageIndices originalImages:weakSelf.originalImageIndices];
-                }
-            
-            /** imagePickerSheetVCSendImageBlock回调 */
-            if (weakSelf.imagePickerSheetVCSendImageWithInfoBlock) {
-                weakSelf.imagePickerSheetVCSendImageWithInfoBlock(weakSelf.thumbnailImageIndices, weakSelf.originalImageIndices, weakSelf.imageInfoIndices);
-            } else
-            /** 代理 */
-                if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerThumbnailImages:originalImages:infos:)]) {
-                    [weakSelf.delegate imagePickerSheetViewControllerThumbnailImages:weakSelf.thumbnailImageIndices originalImages:weakSelf.originalImageIndices infos:weakSelf.imageInfoIndices];
-                }
             
             [weakSelf dismiss];
         }];
