@@ -6,6 +6,7 @@
 
 * CocoaPods：pod 'ImagePickerSheetViewController'
 * 手动导入：将ImagePickerSheet\ImagePickerSheetViewController文件夹拽入项目中，导入头文件：#import "ImagePickerSheetViewController.h"，依赖LFImagePickerController
+* 开启编辑功能：pod 'LFImagePickerController/LFMediaEdit'
 
 ## 调用代码
 

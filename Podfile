@@ -9,4 +9,5 @@ inhibit_all_warnings!
 
 target 'ImagePickerSheet' do
 pod 'LFImagePickerController'
+#pod 'LFImagePickerController/LFMediaEdit'
 end
