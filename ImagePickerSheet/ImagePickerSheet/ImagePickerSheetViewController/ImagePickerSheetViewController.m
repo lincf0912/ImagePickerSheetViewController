@@ -107,7 +107,7 @@
     }
 
     self.showPoint = CGPointMake(0, ScreenHeight-tableViewHeight);
-    self.hiddenPoint = CGPointMake(0, MAX(ScreenWidth, ScreenHeight)); /** 取最大值，适配屏幕方向 */
+    self.hiddenPoint = CGPointMake(0, ScreenHeight);
     
     self.tableView = [[UITableView alloc] initWithFrame:(CGRect){self.hiddenPoint, {ScreenWidth, tableViewHeight}} style:UITableViewStylePlain];
     self.tableView.delegate = self;
@@ -140,21 +140,6 @@
 //    [self.window sendSubviewToBack:self.backgroundImageView];
 }
 
-- (void)viewDidLayoutSubviews
-{
-    [super viewDidLayoutSubviews];
-    
-    /** 弹起内置模块不处理tableView的位置 */
-    if (self.openLFPhotoPicker) return;
-    
-    CGFloat tableViewPreviewHeight = enlargedPreviews ? tableViewEnlargedPreviewRowHeight : tableViewPreviewRowHeight;
-    CGFloat tableViewHeight = actions.count * tableViewCellHeight + tableViewPreviewHeight;
-    self.tableView.frame = CGRectMake(CGRectGetMinX(self.view.bounds), CGRectGetMaxY(self.view.bounds)-tableViewHeight, CGRectGetWidth(self.view.bounds), tableViewHeight);
-    self.backgroundView.frame = self.view.bounds;
-    
-    self.showPoint = CGPointMake(0, ScreenHeight-tableViewHeight);
-}
-
 - (void)viewDidLoad {
     [super viewDidLoad];
     // Do any additional setup after loading the view.
@@ -170,6 +155,26 @@
     if (self.openLFPhotoPicker) {
         [self dismiss];
     }
+}
+
+- (void)viewWillLayoutSubviews
+{
+    [super viewWillLayoutSubviews];
+    /** 弹起内置模块不处理tableView的位置 */
+    if (self.openLFPhotoPicker) return;
+    
+    CGFloat tableViewPreviewHeight = enlargedPreviews ? tableViewEnlargedPreviewRowHeight : tableViewPreviewRowHeight;
+    CGFloat tableViewHeight = actions.count * tableViewCellHeight + tableViewPreviewHeight;
+    
+    if (@available(iOS 11.0, *)) {
+        tableViewHeight += self.view.safeAreaInsets.bottom;
+    }
+    
+    self.tableView.frame = CGRectMake(CGRectGetMinX(self.view.bounds), CGRectGetMaxY(self.view.bounds)-tableViewHeight, CGRectGetWidth(self.view.bounds), tableViewHeight);
+    self.backgroundView.frame = self.view.bounds;
+    
+    self.showPoint = CGPointMake(0, ScreenHeight-tableViewHeight);
+     self.hiddenPoint = CGPointMake(0, ScreenHeight);
 }
 
 - (void)dealloc

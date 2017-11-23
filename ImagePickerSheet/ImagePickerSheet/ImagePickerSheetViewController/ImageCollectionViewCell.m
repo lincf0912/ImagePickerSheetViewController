@@ -47,6 +47,7 @@
     if (_imageView == nil) {
         _imageView = [[UIImageView alloc] init];
         _imageView.contentMode = UIViewContentModeScaleAspectFill;
+        _imageView.clipsToBounds = YES;
     }
     return _imageView;
 }
