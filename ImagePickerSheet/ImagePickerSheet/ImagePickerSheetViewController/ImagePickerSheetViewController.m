@@ -254,6 +254,10 @@
         
         self.isVisible = YES;
         
+        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerWillBeginShow:)]) {
+            [self.delegate imagePickerSheetViewControllerWillBeginShow:self];
+        }
+        
         if (IOS8_OR_LATER) {
             self.modalPresentationStyle = UIModalPresentationCustom;
 //            [self.backgroundImageView removeFromSuperview];
@@ -281,12 +285,26 @@
                                  /** 完成后才添加dismiss手势，避免用户猛点屏幕，UI未能出现就已被dismiss的情况 */
                                  UITapGestureRecognizer *dismissTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismiss)];
                                  [self.backgroundView addGestureRecognizer:dismissTap];
+                                 if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerDidBeginShow:)]) {
+                                     [self.delegate imagePickerSheetViewControllerDidBeginShow:self];
+                                 }
                              }];
         } else {
             CGRect rect = self.tableView.frame;
             rect.origin = self.showPoint;
             self.tableView.frame = rect;
             self.backgroundView.alpha = 0.3961;
+            
+            [self.view addSubview:self.backgroundView];
+            [self.view addSubview:self.tableView];
+            self.window = nil;
+            /** 完成后才添加dismiss手势，避免用户猛点屏幕，UI未能出现就已被dismiss的情况 */
+            UITapGestureRecognizer *dismissTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismiss)];
+            [self.backgroundView addGestureRecognizer:dismissTap];
+            
+            if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerDidBeginShow:)]) {
+                [self.delegate imagePickerSheetViewControllerDidBeginShow:self];
+            }
         }
     }
 }
@@ -305,12 +323,19 @@
 {
     WeakSelf
     if (self.isVisible == YES) {
+        if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerWillEndShow:)]) {
+            [self.delegate imagePickerSheetViewControllerWillEndShow:self];
+        }
         [self hideView:^{
             [weakSelf.tableView removeFromSuperview];
             [weakSelf.backgroundView removeFromSuperview];
 //            [self.backgroundImageView removeFromSuperview];
-            if (weakSelf.dismissBlock) weakSelf.dismissBlock();
-            [self dismissViewControllerAnimated:NO completion:completion];
+            [weakSelf dismissViewControllerAnimated:NO completion:^{
+                if (completion) completion();
+                if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerDidEndShow:)]) {
+                    [weakSelf.delegate imagePickerSheetViewControllerDidEndShow:weakSelf];
+                }
+            }];
         }];
         // Set everything to nil
     }
@@ -331,7 +356,7 @@
                          self.backgroundView.alpha = 0;
                      }
                      completion:^(BOOL finished) {
-                         completion();
+                         if (completion) completion();
                      }];
 }
 

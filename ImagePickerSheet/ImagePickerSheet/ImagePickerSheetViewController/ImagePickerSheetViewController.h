@@ -13,6 +13,14 @@
 
 @protocol ImagePickerSheetViewControllerDelegate <NSObject>
 @optional
+/* 即将显示 */
+- (void)imagePickerSheetViewControllerWillBeginShow:(ImagePickerSheetViewController *)imagePickerSheet;
+/* 完全显示 */
+- (void)imagePickerSheetViewControllerDidBeginShow:(ImagePickerSheetViewController *)imagePickerSheet;
+/* 即将关闭 */
+- (void)imagePickerSheetViewControllerWillEndShow:(ImagePickerSheetViewController *)imagePickerSheet;
+/* 完全关闭 */
+- (void)imagePickerSheetViewControllerDidEndShow:(ImagePickerSheetViewController *)imagePickerSheet;
 
 /** 发送3 */
 - (void)imagePickerSheetViewControllerResultImages:(NSArray <LFResultObject *>*)resultImages;
@@ -54,7 +62,7 @@
 /** 使用内置相册回调->设置属性 */
 @property (nonatomic, copy) void (^photoLabrary)(LFImagePickerController *lf_imagePicker);
 /** 销毁回调 */
-@property (nonatomic, copy) void (^dismissBlock)();
+@property (nonatomic, copy) void (^dismissBlock)(void) __deprecated_msg("Block deprecated. Use `imagePickerSheetViewControllerDidEndShow`");
 
 - (void)showImagePickerInController:(UIViewController *)controller animated:(BOOL)animated;
 
