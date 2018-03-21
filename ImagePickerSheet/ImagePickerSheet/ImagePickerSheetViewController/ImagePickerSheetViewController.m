@@ -372,8 +372,7 @@
     
     CGFloat proportion = imageWidth/imageHeight;
     
-    CGFloat rowHeight = enlargedPreviews ? tableViewEnlargedPreviewRowHeight : tableViewPreviewRowHeight;
-    CGFloat height = rowHeight - 2.0 * collectionViewInset;
+    CGFloat height = CGRectGetHeight(self.collectionView.frame) - self.collectionView.contentInset.top - self.collectionView.contentInset.bottom - self.collectionView.imagePreviewLayout.sectionInset.top - self.collectionView.imagePreviewLayout.sectionInset.bottom;
     
     CGSize resultSize = CGSizeMake(proportion * height, height);
     

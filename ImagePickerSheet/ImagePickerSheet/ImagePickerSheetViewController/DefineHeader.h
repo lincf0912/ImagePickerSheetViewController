@@ -20,8 +20,8 @@
 #define ScreenWidth [UIScreen mainScreen].bounds.size.width
 #define ScreenHeight [UIScreen mainScreen].bounds.size.height
 /** 选择器高度 */
-#define tableViewPreviewRowHeight (roundf((ScreenHeight > ScreenWidth ? ScreenHeight*0.2 : ScreenHeight*0.3)))
-#define tableViewEnlargedPreviewRowHeight (roundf((ScreenHeight > ScreenWidth ? ScreenHeight*0.3 : ScreenHeight*0.4)))
+#define tableViewPreviewRowHeight (ceilf((ScreenHeight > ScreenWidth ? ScreenHeight*0.2 : ScreenHeight*0.3)))
+#define tableViewEnlargedPreviewRowHeight (ceilf((ScreenHeight > ScreenWidth ? ScreenHeight*0.3 : ScreenHeight*0.4)))
 #define tableViewCellHeight 50.0
 /** 选择器放大扩展高度 */
 #define imagePickerExpandHeight ScreenHeight*0.1
