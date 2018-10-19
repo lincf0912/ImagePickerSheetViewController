@@ -693,6 +693,11 @@
 - (void)imagePickerViewCancel
 {
     NSLog(@"取消");
+    if (self.imagePickerSheetVCCancel) {
+        self.imagePickerSheetVCCancel();
+    } else if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerDidCancel:)]) {
+        [self.delegate imagePickerSheetViewControllerDidCancel:self];
+    }
     [self dismiss];
 }
 

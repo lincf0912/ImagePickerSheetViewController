@@ -24,6 +24,9 @@
 
 /** 发送3 */
 - (void)imagePickerSheetViewControllerResultImages:(NSArray <LFResultObject *>*)resultImages;
+/** 取消 */
+- (void)imagePickerSheetViewControllerDidCancel:(ImagePickerSheetViewController *)imagePickerSheet;
+
 
 /** 拍照发送 注：也可以实现imagePickerSheetVCPhotoSendImageBlock回调*/
 - (void)imagePickerSheetViewControllerPhotoImage:(UIImage *)image;
@@ -54,6 +57,8 @@
 @property (nonatomic, copy) void(^imagePickerSheetVCSendResultImageBlock)(NSArray <LFResultObject *>* resultImages);
 /** 拍照发送，回调回图片 */
 @property (nonatomic, copy) void (^imagePickerSheetVCPhotoSendImageBlock)(UIImage *image);
+/** 取消 */
+@property (nonatomic, copy) void (^imagePickerSheetVCCancel)(void);
 /** 最大选择数量 */
 @property (nonatomic, assign) NSInteger maximumNumberOfSelection;
 /** 显示相册数量，默认20，设置0为全部 */
