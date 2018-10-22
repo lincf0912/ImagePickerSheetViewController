@@ -27,7 +27,7 @@
     /** 点击的次数 */
     singleTapRecognizer.numberOfTapsRequired = 1; // 单击
     /** 给view添加一个手势监测 */
-    singleTapRecognizer.enabled = NO;
+    singleTapRecognizer.enabled = YES;
     [self.view addGestureRecognizer:singleTapRecognizer];
     
     /** 触发允许使用照片 */
@@ -39,13 +39,13 @@
 - (void)viewWillAppear:(BOOL)animated
 {
     [super viewWillAppear:animated];
-    singleTapRecognizer.enabled = YES;
+//    singleTapRecognizer.enabled = YES;
 }
 
 - (void)viewWillDisappear:(BOOL)animated
 {
     [super viewWillDisappear:animated];
-    singleTapRecognizer.enabled = NO;
+//    singleTapRecognizer.enabled = NO;
 }
 
 - (void)didReceiveMemoryWarning {
@@ -60,7 +60,7 @@
     imagePicker.delegate = self;
     imagePicker.zoomAnimited = YES;
     imagePicker.photoLabrary = ^(LFImagePickerController *lf_imagePicker) {
-        lf_imagePicker.allowTakePicture = NO;
+//        lf_imagePicker.allowTakePicture = NO;
 //        lf_imagePicker.allowPickingVideo = NO;
         lf_imagePicker.doneBtnTitleStr = @"发送";
     };
@@ -71,4 +71,15 @@
 //{
 //    NSLog(@"打开第三方框架");
 //}
+
+- (void)imagePickerSheetViewControllerResultImages:(NSArray <LFResultObject *>*)resultImages
+{
+    
+}
+/** 取消 */
+- (void)imagePickerSheetViewControllerDidCancel:(ImagePickerSheetViewController *)imagePickerSheet
+{
+    
+}
+
 @end

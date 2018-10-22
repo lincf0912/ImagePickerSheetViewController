@@ -149,14 +149,6 @@
     [self reloadImagesFromLibrary];
 }
 
-- (void)viewDidAppear:(BOOL)animated
-{
-    [super viewDidAppear:animated];
-    if (self.openLFPhotoPicker) {
-        [self dismiss];
-    }
-}
-
 - (void)viewWillLayoutSubviews
 {
     [super viewWillLayoutSubviews];
@@ -603,12 +595,16 @@
         NSLog(@"Media type:%@" , mediaType);
     }
     
-    [picker dismissViewControllerAnimated:YES completion:NULL];
+    [picker dismissViewControllerAnimated:YES completion:^{
+        [self dismiss];
+    }];
 }
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker
 {
-    [picker dismissViewControllerAnimated:YES completion:NULL];
+    [picker dismissViewControllerAnimated:YES completion:^{    
+        [self imagePickerViewCancel];
+    }];
 }
 
 #pragma mark - LFImagePickerControllerDelegate
@@ -619,6 +615,18 @@
     } else if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerResultImages:)]) {
         [self.delegate imagePickerSheetViewControllerResultImages:results];
     }
+    
+    [self dismiss];
+}
+
+- (void)lf_imagePickerControllerTakePhoto:(LFImagePickerController *)picker
+{
+    [self imagePickerViewTakePhoto];
+}
+
+- (void)lf_imagePickerControllerDidCancel:(LFImagePickerController *)picker
+{
+    [self imagePickerViewCancel];
 }
 
 #pragma mark - ImagePickerViewDelegate
@@ -631,7 +639,7 @@
             [self.delegate imagePickerSheetViewControllerOpenPhotoLabrary];
         }];
     } else {
-        /** 记录打开内置相册，在viewDidAppear 销毁dismiss */
+        /** 记录打开内置相册 */
         self.openLFPhotoPicker = YES;
         /** 打开内置相册 */
         [self hideView:^{
@@ -662,29 +670,38 @@
                 [self.delegate imagePickerSheetViewControllerTakePhoto];
             }];
         } else {
-            /** 记录打开内置相册，在viewDidAppear 销毁dismiss */
-            self.openLFPhotoPicker = YES;
-            /** 打开原生相机 */
-            [self hideView:^{
-                UIImagePickerControllerSourceType srcType = UIImagePickerControllerSourceTypeCamera;
-                UIImagePickerController *mediaPickerController = [[UIImagePickerController alloc] init];
-                mediaPickerController.sourceType = srcType;
-                mediaPickerController.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
-                mediaPickerController.delegate = self;
-                mediaPickerController.mediaTypes = [[NSArray alloc] initWithObjects: (NSString *) kUTTypeImage, nil];
-                [self presentViewController:mediaPickerController animated:YES completion:^{
-                    
-                    if([[[UIDevice currentDevice] systemVersion] floatValue] >= 7.0)
-                    {
-                        AVAuthorizationStatus authStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
-                        if (authStatus ==AVAuthorizationStatusRestricted || authStatus ==AVAuthorizationStatusDenied)
+            
+            void (^takePhotoHander)(void) = ^{
+                /** 打开原生相机 */
+                [self hideView:^{
+                    UIImagePickerControllerSourceType srcType = UIImagePickerControllerSourceTypeCamera;
+                    UIImagePickerController *mediaPickerController = [[UIImagePickerController alloc] init];
+                    mediaPickerController.sourceType = srcType;
+                    mediaPickerController.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
+                    mediaPickerController.delegate = self;
+                    mediaPickerController.mediaTypes = [[NSArray alloc] initWithObjects: (NSString *) kUTTypeImage, nil];
+                    [self presentViewController:mediaPickerController animated:YES completion:^{
+                        
+                        if([[[UIDevice currentDevice] systemVersion] floatValue] >= 7.0)
                         {
-                            UIAlertView *prompt = [[UIAlertView alloc] initWithTitle:nil message:@"请在iPhone的“设置-隐私-相机”选项中，允许本应用访问你的相机" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
-                            [prompt show];
+                            AVAuthorizationStatus authStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
+                            if (authStatus ==AVAuthorizationStatusRestricted || authStatus ==AVAuthorizationStatusDenied)
+                            {
+                                UIAlertView *prompt = [[UIAlertView alloc] initWithTitle:nil message:@"请在iPhone的“设置-隐私-相机”选项中，允许本应用访问你的相机" delegate:nil cancelButtonTitle:@"确定" otherButtonTitles:nil];
+                                [prompt show];
+                            }
                         }
-                    }
+                    }];
                 }];
-            }];
+            };
+            
+            if (self.openLFPhotoPicker) {
+                [self.presentedViewController dismissViewControllerAnimated:YES completion:^{
+                    takePhotoHander();
+                }];
+            } else {
+                takePhotoHander();
+            }
         }
     }
 }
