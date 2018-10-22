@@ -275,7 +275,7 @@
                                  [self.view addSubview:self.tableView];
                                  self.window = nil;
                                  /** 完成后才添加dismiss手势，避免用户猛点屏幕，UI未能出现就已被dismiss的情况 */
-                                 UITapGestureRecognizer *dismissTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismiss)];
+                                 UITapGestureRecognizer *dismissTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(imagePickerViewCancel)];
                                  [self.backgroundView addGestureRecognizer:dismissTap];
                                  if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerDidBeginShow:)]) {
                                      [self.delegate imagePickerSheetViewControllerDidBeginShow:self];
@@ -291,7 +291,7 @@
             [self.view addSubview:self.tableView];
             self.window = nil;
             /** 完成后才添加dismiss手势，避免用户猛点屏幕，UI未能出现就已被dismiss的情况 */
-            UITapGestureRecognizer *dismissTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismiss)];
+            UITapGestureRecognizer *dismissTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(imagePickerViewCancel)];
             [self.backgroundView addGestureRecognizer:dismissTap];
             
             if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerDidBeginShow:)]) {
