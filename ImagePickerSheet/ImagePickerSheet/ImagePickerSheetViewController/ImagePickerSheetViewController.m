@@ -721,7 +721,7 @@
 #pragma mark - UIAlertViewDelegate
 - (void)alertView:(UIAlertView *)alertView clickedButtonAtIndex:(NSInteger)buttonIndex
 {
-    [self dismiss];
+    [self imagePickerViewCancel];
 }
 
 /** 发送按钮 */
