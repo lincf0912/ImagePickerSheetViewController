@@ -58,15 +58,25 @@
     return NSStringFromClass([self class]);
 }
 
++ (NSBundle *)imagePickerSheetBundle
+{
+    static NSBundle *lf_imagePickerSheetBundle = nil;
+    if (lf_imagePickerSheetBundle == nil) {
+        // 这里不使用mainBundle是为了适配pod 1.x和0.x
+        lf_imagePickerSheetBundle = [NSBundle bundleWithPath:[[NSBundle bundleForClass:[NSClassFromString(@"ImagePickerSheetViewController") class]] pathForResource:@"SupplementaryView" ofType:@"bundle"]];
+    }
+    return lf_imagePickerSheetBundle;
+}
+
 + (UIImage *)checkmarkImage
 {
-    UIImage *image = [UIImage imageNamed:@"SupplementaryView.bundle/PreviewSupplementaryView-Checkmark"];
+    UIImage *image = [UIImage imageWithContentsOfFile:[[self imagePickerSheetBundle] pathForResource:@"PreviewSupplementaryView-Checkmark.png" ofType:nil]];
     return [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
 }
 
 + (UIImage *)selectedCheckmarkImage
 {
-    UIImage *image = [UIImage imageNamed:@"SupplementaryView.bundle/PreviewSupplementaryView-Checkmark-Selected"];
+    UIImage *image = [UIImage imageWithContentsOfFile:[[self imagePickerSheetBundle] pathForResource:@"PreviewSupplementaryView-Checkmark-Selected.png" ofType:nil]];
     return [image imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
 }
 
