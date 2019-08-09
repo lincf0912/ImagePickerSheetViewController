@@ -193,14 +193,15 @@
     } else {
         WeakSelf
         long long start = [[NSDate date] timeIntervalSince1970] * 1000;
-        [[LFAssetManager manager] getCameraRollAlbum:NO allowPickingImage:YES fetchLimit:self.fetchLimit ascending:NO completion:^(LFAlbum *model) {
+        [[LFAssetManager manager] getCameraRollAlbum:LFPickingMediaTypePhoto fetchLimit:self.fetchLimit ascending:NO completion:^(LFAlbum *model) {
+            
             long long end1 = [[NSDate date] timeIntervalSince1970] * 1000;
             NSLog(@"相册加载耗时：%lld毫秒", end1 - start);
             if (!weakSelf) return ;
             /** iOS8之后 获取相册的顺序已经为倒序，获取相册内的图片，要使用顺序获取，否则负负得正 */
             BOOL ascending = IOS8_OR_LATER ? YES : NO;
             /** 优化获取数据源，分批次获取 */
-            [[LFAssetManager manager] getAssetsFromFetchResult:model.result allowPickingVideo:NO allowPickingImage:YES fetchLimit:self.fetchLimit ascending:ascending completion:^(NSArray<LFAsset *> *models) {
+            [[LFAssetManager manager] getAssetsFromFetchResult:model.result allowPickingType:LFPickingMediaTypePhoto fetchLimit:self.fetchLimit ascending:ascending completion:^(NSArray<LFAsset *> *models) {
                 
                 [self.assets addObjectsFromArray:models];
                 
