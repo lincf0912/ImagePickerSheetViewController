@@ -645,7 +645,7 @@
         /** 打开内置相册 */
         [self hideView:^{
             LFImagePickerController *picker = [[LFImagePickerController alloc] initWithMaxImagesCount:self.maximumNumberOfSelection delegate:self];
-            picker.allowPickingVideo = NO;
+            picker.allowPickingType = LFPickingMediaTypePhoto;
             if (self.photoLabrary) self.photoLabrary(picker);
             [self presentViewController:picker animated:YES completion:nil];
         }];
