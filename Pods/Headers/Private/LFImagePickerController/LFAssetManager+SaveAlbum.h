@@ -1,0 +1,1 @@
+../../../LFImagePickerController/LFImagePickerController/LFImagePickerController/class/manager/LFAssetManager+SaveAlbum.h

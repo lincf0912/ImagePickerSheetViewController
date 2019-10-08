@@ -1,0 +1,1 @@
+../../../LFImagePickerController/LFImagePickerController/LFImagePickerController/class/model/result/LFResultImage.h

@@ -165,7 +165,6 @@
 				6FD4AE4B1B4BCD4400801864 /* Sources */,
 				6FD4AE4C1B4BCD4400801864 /* Frameworks */,
 				6FD4AE4D1B4BCD4400801864 /* Resources */,
-				BD9B03F821E5491564942911 /* [CP] Embed Pods Frameworks */,
 				7F5FD3794432D013A43E6170 /* [CP] Copy Pods Resources */,
 			);
 			buildRules = (
@@ -231,16 +230,16 @@
 			files = (
 			);
 			inputPaths = (
-				"${SRCROOT}/../Pods/Target Support Files/Pods-ImagePickerSheet/Pods-ImagePickerSheet-resources.sh",
+				"${PODS_ROOT}/Target Support Files/Pods-ImagePickerSheet/Pods-ImagePickerSheet-resources.sh",
 				"${PODS_ROOT}/LFImagePickerController/LFImagePickerController/LFImagePickerController/class/LFImagePickerController.bundle",
 			);
 			name = "[CP] Copy Pods Resources";
 			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}",
+				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/LFImagePickerController.bundle",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${SRCROOT}/../Pods/Target Support Files/Pods-ImagePickerSheet/Pods-ImagePickerSheet-resources.sh\"\n";
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-ImagePickerSheet/Pods-ImagePickerSheet-resources.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		852329DB9B6590432EBDDD25 /* [CP] Check Pods Manifest.lock */ = {
@@ -259,21 +258,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
-			showEnvVarsInLog = 0;
-		};
-		BD9B03F821E5491564942911 /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${SRCROOT}/../Pods/Target Support Files/Pods-ImagePickerSheet/Pods-ImagePickerSheet-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */
