@@ -31,9 +31,9 @@
     [self.view addGestureRecognizer:singleTapRecognizer];
     
     /** 触发允许使用照片 */
-    [[LFAssetManager manager].assetLibrary enumerateGroupsWithTypes:ALAssetsGroupSavedPhotos
-                                                 usingBlock:nil
-                                               failureBlock:nil];
+//    [[LFAssetManager manager].assetLibrary enumerateGroupsWithTypes:ALAssetsGroupSavedPhotos
+//                                                 usingBlock:nil
+//                                               failureBlock:nil];
 }
 
 - (void)viewWillAppear:(BOOL)animated
@@ -72,14 +72,19 @@
 //    NSLog(@"打开第三方框架");
 //}
 
+- (void)imagePickerSheetViewControllerPhotoImage:(UIImage *)image
+{
+    NSLog(@"%@", image);
+}
+
 - (void)imagePickerSheetViewControllerResultImages:(NSArray <LFResultObject *>*)resultImages
 {
-    
+    NSLog(@"%@", resultImages);
 }
 /** 取消 */
 - (void)imagePickerSheetViewControllerDidCancel:(ImagePickerSheetViewController *)imagePickerSheet
 {
-    
+    NSLog(@"cancel");
 }
 
 @end

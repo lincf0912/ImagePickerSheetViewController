@@ -37,6 +37,8 @@
     UIActivityIndicatorView *_HUDIndicatorView;
     UILabel *_HUDLabel;
     
+    NSTimer *_timer;
+    UIAlertView *_authorizedAlertView;
 }
 /** 原始窗口 */
 @property (nonatomic, strong) UIWindow *window;
@@ -146,7 +148,7 @@
     
     actions = @[kPhotoBtnTitle, kCameraBtnTitle, kCancelBtnTitle];
     [self setupView];
-    [self reloadImagesFromLibrary];
+    [self loadLibraryAuthorized];
 }
 
 - (void)viewWillLayoutSubviews
@@ -171,7 +173,8 @@
 
 - (void)dealloc
 {
-    
+    [_timer invalidate];
+    _timer = nil;
 }
 
 - (void)didReceiveMemoryWarning {
@@ -180,7 +183,7 @@
 }
 
 #pragma mark - 获取相册的所有图片
-- (void)reloadImagesFromLibrary
+- (void)loadLibraryAuthorized
 {
     [LFAssetManager manager].shouldFixOrientation = YES;
     
@@ -190,32 +193,49 @@
         NSString *msg = [NSString stringWithFormat:@"请在%@的\"设置-隐私-照片\"选项中，\r允许%@访问你的手机相册。",[UIDevice currentDevice].model,appName];
         UIAlertView *alertView = [[UIAlertView alloc] initWithTitle:@"相册访问失败" message:msg delegate:self cancelButtonTitle:@"确定" otherButtonTitles:nil];
         [alertView show];
+        _authorizedAlertView = alertView;
+        
+        _timer = [NSTimer scheduledTimerWithTimeInterval:0.2 target:self selector:@selector(observeAuthrizationStatusChange) userInfo:nil repeats:YES];
     } else {
-        WeakSelf
-        long long start = [[NSDate date] timeIntervalSince1970] * 1000;
-        [[LFAssetManager manager] getCameraRollAlbum:LFPickingMediaTypePhoto fetchLimit:self.fetchLimit ascending:NO completion:^(LFAlbum *model) {
-            
-            long long end1 = [[NSDate date] timeIntervalSince1970] * 1000;
-            NSLog(@"相册加载耗时：%lld毫秒", end1 - start);
-            if (!weakSelf) return ;
-            /** iOS8之后 获取相册的顺序已经为倒序，获取相册内的图片，要使用顺序获取，否则负负得正 */
-            BOOL ascending = IOS8_OR_LATER ? YES : NO;
-            /** 优化获取数据源，分批次获取 */
-            [[LFAssetManager manager] getAssetsFromFetchResult:model.result allowPickingType:LFPickingMediaTypePhoto fetchLimit:self.fetchLimit ascending:ascending completion:^(NSArray<LFAsset *> *models) {
-                
-                [self.assets addObjectsFromArray:models];
-                
-                if (self.assets.count == 0) {
-                    [self imagePickerViewPhotoLibrary];
-                } else {
-                    [self.collectionView reloadData];
-                }
-                
-                long long end = [[NSDate date] timeIntervalSince1970] * 1000;
-                NSLog(@"%lu张图片加载耗时：%lld毫秒", (unsigned long)self.fetchLimit, end - start);
-            }];
-        }];
+        [self reloadImagesFromLibrary];
     }
+}
+
+- (void)observeAuthrizationStatusChange {
+    if ([[LFAssetManager manager] authorizationStatusAuthorized]) {
+        [_authorizedAlertView dismissWithClickedButtonIndex:_authorizedAlertView.cancelButtonIndex animated:NO];
+        [_timer invalidate];
+        _timer = nil;
+        [self reloadImagesFromLibrary];
+    }
+}
+
+- (void)reloadImagesFromLibrary
+{
+    WeakSelf
+    long long start = [[NSDate date] timeIntervalSince1970] * 1000;
+    [[LFAssetManager manager] getCameraRollAlbum:LFPickingMediaTypePhoto fetchLimit:self.fetchLimit ascending:NO completion:^(LFAlbum *model) {
+        
+        long long end1 = [[NSDate date] timeIntervalSince1970] * 1000;
+        NSLog(@"相册加载耗时：%lld毫秒", end1 - start);
+        if (!weakSelf) return ;
+        /** iOS8之后 获取相册的顺序已经为倒序，获取相册内的图片，要使用顺序获取，否则负负得正 */
+        BOOL ascending = IOS8_OR_LATER ? YES : NO;
+        /** 优化获取数据源，分批次获取 */
+        [[LFAssetManager manager] getAssetsFromFetchResult:model.result allowPickingType:LFPickingMediaTypePhoto fetchLimit:self.fetchLimit ascending:ascending completion:^(NSArray<LFAsset *> *models) {
+            
+            [self.assets addObjectsFromArray:models];
+            
+            if (self.assets.count == 0) {
+                [self imagePickerViewPhotoLibrary];
+            } else {
+                [self.collectionView reloadData];
+            }
+            
+            long long end = [[NSDate date] timeIntervalSince1970] * 1000;
+            NSLog(@"%lu张图片加载耗时：%lld毫秒", (unsigned long)self.fetchLimit, end - start);
+        }];
+    }];
 }
 
 
@@ -584,20 +604,26 @@
 - (void)imagePickerController:(UIImagePickerController *)picker didFinishPickingMediaWithInfo:(NSDictionary *)info
 {
     NSString *mediaType = [info objectForKey:UIImagePickerControllerMediaType];
+    UIImage *chosenImage = nil;
     if (picker.sourceType==UIImagePickerControllerSourceTypeCamera && [mediaType isEqualToString:@"public.image"]){
-        UIImage *chosenImage = info[UIImagePickerControllerOriginalImage];
-        /** 拍照发送block */
-        if (self.imagePickerSheetVCPhotoSendImageBlock) {
-            self.imagePickerSheetVCPhotoSendImageBlock(chosenImage);
-        } else if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerPhotoImage:)]) {
-            [self.delegate imagePickerSheetViewControllerPhotoImage:chosenImage];
-        }
+        chosenImage = info[UIImagePickerControllerOriginalImage];
+        
     } else {
         NSLog(@"Media type:%@" , mediaType);
     }
     
+    __weak typeof(self) weakSelf = self;
     [picker dismissViewControllerAnimated:YES completion:^{
-        [self dismiss];
+        [self dismiss:^{
+            if (chosenImage) {
+                /** 拍照发送block */
+                if (weakSelf.imagePickerSheetVCPhotoSendImageBlock) {
+                    weakSelf.imagePickerSheetVCPhotoSendImageBlock(chosenImage);
+                } else if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerPhotoImage:)]) {
+                    [weakSelf.delegate imagePickerSheetViewControllerPhotoImage:chosenImage];
+                }
+            }
+        }];
     }];
 }
 
@@ -611,13 +637,14 @@
 #pragma mark - LFImagePickerControllerDelegate
 - (void)lf_imagePickerController:(LFImagePickerController *)picker didFinishPickingResult:(NSArray <LFResultObject /* <LFResultImage/LFResultVideo> */*> *)results
 {
-    if (self.imagePickerSheetVCSendResultImageBlock) {
-        self.imagePickerSheetVCSendResultImageBlock(results);
-    } else if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerResultImages:)]) {
-        [self.delegate imagePickerSheetViewControllerResultImages:results];
-    }
-    
-    [self dismiss];
+    __weak typeof(self) weakSelf = self;
+    [self dismiss:^{
+        if (weakSelf.imagePickerSheetVCSendResultImageBlock) {
+            weakSelf.imagePickerSheetVCSendResultImageBlock(results);
+        } else if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerResultImages:)]) {
+            [weakSelf.delegate imagePickerSheetViewControllerResultImages:results];
+        }
+    }];
 }
 
 - (void)lf_imagePickerControllerTakePhoto:(LFImagePickerController *)picker
@@ -646,6 +673,7 @@
         [self hideView:^{
             LFImagePickerController *picker = [[LFImagePickerController alloc] initWithMaxImagesCount:self.maximumNumberOfSelection delegate:self];
             picker.allowPickingType = LFPickingMediaTypePhoto;
+            picker.modalPresentationStyle = UIModalPresentationFullScreen;
             if (self.photoLabrary) self.photoLabrary(picker);
             [self presentViewController:picker animated:YES completion:nil];
         }];
@@ -681,6 +709,7 @@
                     mediaPickerController.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
                     mediaPickerController.delegate = self;
                     mediaPickerController.mediaTypes = [[NSArray alloc] initWithObjects: (NSString *) kUTTypeImage, nil];
+                    mediaPickerController.modalPresentationStyle = UIModalPresentationFullScreen;
                     [self presentViewController:mediaPickerController animated:YES completion:^{
                         
                         if([[[UIDevice currentDevice] systemVersion] floatValue] >= 7.0)
@@ -711,12 +740,14 @@
 - (void)imagePickerViewCancel
 {
     NSLog(@"取消");
-    if (self.imagePickerSheetVCCancel) {
-        self.imagePickerSheetVCCancel();
-    } else if ([self.delegate respondsToSelector:@selector(imagePickerSheetViewControllerDidCancel:)]) {
-        [self.delegate imagePickerSheetViewControllerDidCancel:self];
-    }
-    [self dismiss];
+    __weak typeof(self) weakSelf = self;
+    [self dismiss:^{
+        if (weakSelf.imagePickerSheetVCCancel) {
+            weakSelf.imagePickerSheetVCCancel();
+        } else if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerDidCancel:)]) {
+            [weakSelf.delegate imagePickerSheetViewControllerDidCancel:self];
+        }
+    }];
 }
 
 #pragma mark - UIAlertViewDelegate
@@ -748,13 +779,13 @@
             
             if ([weakSelf.resultIndices containsObject:@1]) return;
             
-            if (weakSelf.imagePickerSheetVCSendResultImageBlock) {
-                weakSelf.imagePickerSheetVCSendResultImageBlock([weakSelf.resultIndices copy]);
-            } else if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerResultImages:)]) {
-                [weakSelf.delegate imagePickerSheetViewControllerResultImages:[weakSelf.resultIndices copy]];
-            }
-            
-            [weakSelf dismiss];
+            [weakSelf dismiss:^{
+                if (weakSelf.imagePickerSheetVCSendResultImageBlock) {
+                    weakSelf.imagePickerSheetVCSendResultImageBlock([weakSelf.resultIndices copy]);
+                } else if ([weakSelf.delegate respondsToSelector:@selector(imagePickerSheetViewControllerResultImages:)]) {
+                    [weakSelf.delegate imagePickerSheetViewControllerResultImages:[weakSelf.resultIndices copy]];
+                }
+            }];
         }];
     }
     
