@@ -1,27 +1,29 @@
 //
-//  LFAblumTitleView.m
+//  LFAlbumTitleView.m
 //  LFImagePickerController
 //
 //  Created by TsanFeng Lam on 2019/9/24.
 //  Copyright © 2019 LamTsanFeng. All rights reserved.
 //
 
-#import "LFAblumTitleView.h"
+#import "LFAlbumTitleView.h"
 #import "LFAlbumCell.h"
 #import "LFImagePickerHeader.h"
 
-#define LFAblumTitleViewBackgroundColor [UIColor colorWithWhite:0.2 alpha:0.2]
+#define LFAlbumTitleViewBackgroundColor [UIColor colorWithWhite:0.2 alpha:0.2]
 
-@interface LFAblumTitleView () <UITableViewDataSource, UITableViewDelegate, UIGestureRecognizerDelegate>
+@interface LFAlbumTitleView () <UITableViewDataSource, UITableViewDelegate, UIGestureRecognizerDelegate>
 
 @property (nonatomic, weak) UIControl *control;
 @property(nonatomic, weak) UIImageView *imageView;
 @property(nonatomic, weak) UILabel *titleLabel;
 @property(nonatomic, weak) UIView *cornerView;
+@property(nonatomic, weak) CAShapeLayer *cornerViewMaskLayer;
 @property(nonatomic, strong) UIView *backgroundView;
 
-@property(nonatomic, weak) CAShapeLayer *shapeLayer;
-@property(nonatomic, weak) CAShapeLayer *imageViewShapeLayer;
+@property(nonatomic, weak) CALayer *controlMaskLayer;
+@property(nonatomic, weak) CALayer *titleLabelMaskLayer;
+@property(nonatomic, weak) CALayer *imageViewMaskLayer;
 
 @property(nonatomic, weak) UITableView *tableView;
 
@@ -36,7 +38,7 @@
 
 @end
 
-@implementation LFAblumTitleView
+@implementation LFAlbumTitleView
 
 - (instancetype)init
 {
@@ -68,6 +70,11 @@
     [self updateTitleView];
 }
 
+- (void)dealloc
+{
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
 - (void)customInit
 {
     self.frame = CGRectMake(0, 0, [UIScreen mainScreen].bounds.size.width, 44.0);
@@ -77,6 +84,7 @@
     
     UIControl *control = [[UIControl alloc] initWithFrame:self.bounds];
     control.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.1];
+    control.clipsToBounds = YES;
     [control addTarget:self action:@selector(tapCall) forControlEvents:UIControlEventTouchUpInside];
     [self addSubview:control];
     _control = control;
@@ -100,6 +108,9 @@
     [imageView setContentMode:UIViewContentModeScaleAspectFit];
     [self.control addSubview:imageView];
     _imageView = imageView;
+    
+    // 监听屏幕旋转
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(orientationDidChange:) name:UIDeviceOrientationDidChangeNotification object:nil];
 }
 
 + (BOOL)accessInstanceVariablesDirectly
@@ -123,7 +134,7 @@
                     self.tmpIndex = 0;
                 }
                 /** 重置状态 */
-                _state = LFAblumTitleViewStateInactive;
+                _state = LFAlbumTitleViewStateInactive;
                 
                 [self createMenuView];
             } else {
@@ -138,23 +149,23 @@
         self.currentVC = nil;
         // 释放
         [self.backgroundView removeFromSuperview];
-        _state = LFAblumTitleViewStateInactive;
+        _state = LFAlbumTitleViewStateInactive;
     }
 }
 
-- (void)setState:(LFAblumTitleViewState)state
+- (void)setState:(LFAlbumTitleViewState)state
 {
     if (self.superview == nil) return;
     if (_state != state) {
         _state = state;
         switch (state) {
-            case LFAblumTitleViewStateInactive:
+            case LFAlbumTitleViewStateInactive:
             {
                 [self hiddenMenu];
             }
                 break;
                 
-            case LFAblumTitleViewStateActivity:
+            case LFAlbumTitleViewStateActivity:
             {
                 [self showMenu];
             }
@@ -231,6 +242,8 @@
     tableView.dataSource = self;
     tableView.delegate = self;
     [tableView registerClass:[LFAlbumCell class] forCellReuseIdentifier:@"LFAlbumCell"];
+    tableView.separatorColor = [UIColor colorWithWhite:0.5 alpha:1.0];
+    tableView.separatorInset = UIEdgeInsetsZero;
     /** 这个设置iOS9以后才有，主要针对iPad，不设置的话，分割线左侧空出很多 */
     if (@available(iOS 9.0, *))
     {
@@ -254,17 +267,18 @@
 #pragma mark - action
 - (void)tapCall
 {
-    self.state = (self.state == LFAblumTitleViewStateActivity) ? LFAblumTitleViewStateInactive : LFAblumTitleViewStateActivity;
+    self.state = (self.state == LFAlbumTitleViewStateActivity) ? LFAlbumTitleViewStateInactive : LFAlbumTitleViewStateActivity;
 }
 
 - (void)backgroundViewTapCall
 {
-    self.state = LFAblumTitleViewStateInactive;
+    self.state = LFAlbumTitleViewStateInactive;
 }
 
 #pragma mark - show / hiden
 - (void)showMenu
 {
+    [self updateBackgroundView];
     UIView *view = self.currentVC.view;
     CGRect showRect = view.bounds;
     showRect.origin.y -= showRect.size.height;
@@ -279,6 +293,7 @@
         self.backgroundView.alpha = 1.0;
     } completion:^(BOOL finished) {
         self.animating = NO;
+        self.backgroundView.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.6];
     }];
 }
 
@@ -287,6 +302,7 @@
     UIView *view = self.currentVC.view;
     CGRect hidenRect = view.bounds;
     hidenRect.origin.y -= hidenRect.size.height;
+    self.backgroundView.backgroundColor = [UIColor clearColor];
     
     self.animating = YES;
     [UIView animateWithDuration:0.25f animations:^{
@@ -344,7 +360,7 @@
     NSIndexPath *selectedIndexPath = nil;
     if (self.selectedAlbum) {
         if ([model isEqual:self.selectedAlbum]) {
-            self.state = LFAblumTitleViewStateInactive;
+            self.state = LFAlbumTitleViewStateInactive;
             return;
         }
         /** 取消所选 */
@@ -355,6 +371,7 @@
     _selectedAlbum = model;
     self.titleLabel.text = model.name;
     self.enableAnimated = YES;
+    [self setNeedsDisplay];
     [self setNeedsLayout];
     
     [tableView beginUpdates];
@@ -365,7 +382,7 @@
     }
     [tableView endUpdates];
     
-    self.state = LFAblumTitleViewStateInactive;
+    self.state = LFAlbumTitleViewStateInactive;
 }
 
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
@@ -378,30 +395,19 @@
 #pragma mark update frame
 - (void)updateTitleView
 {
-    // 列表
-    if (!self.isAnimating) {
-        UIView *view = self.currentVC.view;
-        UIEdgeInsets safeAreaInsets = UIEdgeInsetsZero;
-        if (@available(iOS 11.0, *)) {
-            safeAreaInsets = view.safeAreaInsets;
-        }
-        self.backgroundView.frame = view.bounds;
-        // 圆角
-        self.cornerView.frame = CGRectMake(0, safeAreaInsets.top, self.backgroundView.bounds.size.width, self.backgroundView.bounds.size.height-safeAreaInsets.top-safeAreaInsets.bottom-34);
-        
-        UIBezierPath *maskPath = [UIBezierPath bezierPathWithRoundedRect:self.cornerView.bounds byRoundingCorners:UIRectCornerBottomLeft | UIRectCornerBottomRight cornerRadii:CGSizeMake(8, 8)];
-        CAShapeLayer *maskLayer = [[CAShapeLayer alloc] init];
-        maskLayer.frame = self.cornerView.bounds;
-        maskLayer.path = maskPath.CGPath;
-        self.cornerView.layer.mask = maskLayer;
-    }
-    
+    CGFloat margin = 7.0;
+    CGFloat insetMargin = 6.0;
     CGSize imageSize = _imageView.image.size;
+    if (self.frame.size.height - 2*margin < imageSize.height) {
+        CGFloat tmpHeight = imageSize.height;
+        imageSize.height = self.frame.size.height - 2*margin;
+        imageSize.width = imageSize.width*imageSize.height/tmpHeight;
+        insetMargin = MIN(2.0, insetMargin-tmpHeight+imageSize.height);
+    }
 
     CGSize textSize = [_titleLabel.text boundingRectWithSize:CGSizeMake([UIScreen mainScreen].bounds.size.width, MAXFLOAT) options:NSStringDrawingUsesLineFragmentOrigin | NSStringDrawingUsesFontLeading attributes:@{NSFontAttributeName:_titleLabel.font, NSForegroundColorAttributeName:_titleLabel.textColor} context:nil].size;
     textSize.width = ceil(textSize.width)+1.0;
     
-    CGFloat margin = 7.0;
     CGRect rect = self.control.frame;
     rect.size.height = self.frame.size.height;
     rect.size.width = textSize.width + margin*2.0;
@@ -412,58 +418,117 @@
     self.frame = rect;
     self.control.hidden = (self.titleLabel.text.length == 0);
     
+    if (self.control.isHidden) return;
+    
+    self.control.center = CGPointMake(CGRectGetMidX(rect), CGRectGetMidY(rect));
+    
+    CGRect oldRect = self.control.frame;
+    CGRect oldMaskRect = self.controlMaskLayer.frame;
+//    CGRect oldTitleLabelRect = self.titleLabel.frame;
+    CGRect oldTitlelabelMaskRect = self.titleLabelMaskLayer.frame;
+    CGRect oldImageRect = self.imageView.frame;
+    CGRect oldImageMaskRect = self.imageViewMaskLayer.frame;
+    
     self.control.frame = rect;
     // draw background
-    CGRect controllBounds = CGRectInset(self.control.bounds, 0, 6);
-    UIBezierPath *path = [UIBezierPath bezierPathWithRoundedRect:controllBounds cornerRadius:CGRectGetHeight(controllBounds)/2];
-    if (self.shapeLayer == nil) {
-        CAShapeLayer *shapeLayer = [CAShapeLayer layer];
-        self.control.layer.mask = shapeLayer;
-        self.shapeLayer = shapeLayer;
+    CGRect controllBounds = CGRectInset(self.control.bounds, 0, insetMargin);
+    if (self.controlMaskLayer == nil) {
+        CALayer *layer = [self createMaskLayer];
+        self.control.layer.mask = layer;
+        self.controlMaskLayer = layer;
     }
-    self.shapeLayer.path = path.CGPath;
+    self.controlMaskLayer.bounds = (CGRect){CGPointZero, controllBounds.size};
+    self.controlMaskLayer.position = controllBounds.origin;
+    self.controlMaskLayer.cornerRadius = CGRectGetHeight(controllBounds)/2;
     
     CGRect titleLabelRect = CGRectMake(margin, (CGRectGetHeight(rect)-textSize.height)/2, textSize.width, textSize.height);
+    self.titleLabel.frame = titleLabelRect;
+    if (self.titleLabelMaskLayer == nil) {
+        CALayer *layer = [self createMaskLayer];
+        self.titleLabel.layer.mask = layer;
+        self.titleLabelMaskLayer = layer;
+    }
+    self.titleLabelMaskLayer.bounds = self.titleLabel.bounds;
     
     self.imageView.frame = CGRectMake(CGRectGetMaxX(titleLabelRect)+margin, (CGRectGetHeight(rect)-imageSize.height)/2, imageSize.width, imageSize.height);
     CGRect imageViewBounds = self.imageView.bounds;
-    UIBezierPath *imageViewPath = [UIBezierPath bezierPathWithRoundedRect:imageViewBounds cornerRadius:CGRectGetHeight(imageViewBounds)/2];
-    if (self.imageViewShapeLayer == nil) {
-        CAShapeLayer *imageViewShapeLayer = [CAShapeLayer layer];
-        self.imageView.layer.mask = imageViewShapeLayer;
-        self.imageViewShapeLayer = imageViewShapeLayer;
+    if (self.imageViewMaskLayer == nil) {
+        CALayer *layer = [self createMaskLayer];
+        self.imageView.layer.mask = layer;
+        self.imageViewMaskLayer = layer;
     }
-    self.imageViewShapeLayer.path = imageViewPath.CGPath;
+    self.imageViewMaskLayer.bounds = (CGRect){CGPointZero, imageViewBounds.size};
+    self.imageViewMaskLayer.cornerRadius = CGRectGetHeight(imageViewBounds)/2;
     
-    CGFloat duration = self.enableAnimated ? 0.5 : 0.0;
+    if (self.enableAnimated)
+    {
+        CGFloat duration = .25;
+        [self makeAnimationWithDruation:duration layer:self.control.layer oldRect:oldRect cornerRadius:NO];
+        [self makeAnimationWithDruation:duration layer:self.controlMaskLayer oldRect:oldMaskRect cornerRadius:YES];
+//        [self makeAnimationWithDruation:duration layer:self.titleLabel.layer oldRect:oldTitleLabelRect cornerRadius:NO];
+        [self makeAnimationWithDruation:duration layer:self.titleLabelMaskLayer oldRect:oldTitlelabelMaskRect cornerRadius:NO];
+        [self makeAnimationWithDruation:duration layer:self.imageView.layer oldRect:oldImageRect cornerRadius:NO];
+        [self makeAnimationWithDruation:duration layer:self.imageViewMaskLayer oldRect:oldImageMaskRect cornerRadius:YES];
+    }
     
-    [self doAnimateWithDuration:duration animations:^{
-        self.titleLabel.frame = titleLabelRect;
-    } completion:^{
-        self.enableAnimated = NO;
-    }];
+    self.enableAnimated = NO;
+}
+
+- (void)updateBackgroundView
+{
+    UIView *view = self.currentVC.view;
+    UIEdgeInsets safeAreaInsets = UIEdgeInsetsZero;
+    if (@available(iOS 11.0, *)) {
+        safeAreaInsets = view.safeAreaInsets;
+    }
+    self.backgroundView.frame = view.bounds;
+    // 圆角
+    self.cornerView.frame = CGRectMake(0, safeAreaInsets.top, self.backgroundView.bounds.size.width, self.backgroundView.bounds.size.height-safeAreaInsets.top-safeAreaInsets.bottom-40);
     
-    
-    
-    
+    UIBezierPath *maskPath = [UIBezierPath bezierPathWithRoundedRect:self.cornerView.bounds byRoundingCorners:UIRectCornerBottomLeft | UIRectCornerBottomRight cornerRadii:CGSizeMake(8, 8)];
+    if (self.cornerViewMaskLayer == nil) {
+        CAShapeLayer *maskLayer = [[CAShapeLayer alloc] init];
+        maskLayer.frame = self.cornerView.bounds;
+        self.cornerView.layer.mask = maskLayer;
+        self.cornerViewMaskLayer = maskLayer;
+    }
+    self.cornerViewMaskLayer.path = maskPath.CGPath;
 }
 
 #pragma mark animated
-- (void)doAnimateWithDuration:(NSTimeInterval)duration animations:(void (^)(void))animations completion:(void (^)(void))completion
+- (void)makeAnimationWithDruation:(CGFloat)duration layer:(CALayer *)layer oldRect:(CGRect)oldRect cornerRadius:(BOOL)cornerRadius
 {
-    if (duration > 0) {
-        [UIView animateWithDuration:duration animations:animations completion:^(BOOL finished) {
-            if (completion) {
-                completion();
-            }
-        }];
-    } else {
-        if (animations) {
-            animations();
-        }
-        if (completion) {
-            completion();
-        }
+    CGRect newRect = layer.frame;
+    if (!CGSizeEqualToSize(oldRect.size, newRect.size)) {
+        CABasicAnimation *animate = [CABasicAnimation animationWithKeyPath:@"bounds"];
+        animate.duration = duration;
+        animate.fromValue = [NSValue valueWithCGRect:(CGRect){CGPointZero, oldRect.size}];
+        animate.toValue = [NSValue valueWithCGRect:(CGRect){CGPointZero, newRect.size}];
+        [layer addAnimation:animate forKey:@"BoundsAnimationKey"];
+    }
+    
+    if (!CGPointEqualToPoint(oldRect.origin, newRect.origin)) {
+        CABasicAnimation *animate = [CABasicAnimation animationWithKeyPath:@"position"];
+        animate.duration = duration;
+        animate.fromValue = [NSValue valueWithCGPoint:CGPointMake(oldRect.origin.x+oldRect.size.width/2, oldRect.origin.y+oldRect.size.height/2)];
+        animate.toValue = [NSValue valueWithCGPoint:CGPointMake(newRect.origin.x+newRect.size.width/2, newRect.origin.y+newRect.size.height/2)];
+        [layer addAnimation:animate forKey:@"PositionAnimationKey"];
+    }
+    
+    if (cornerRadius) {
+        CABasicAnimation *animate = [CABasicAnimation animationWithKeyPath:@"cornerRadius"];
+        animate.duration = duration;
+        animate.fromValue = @(CGRectGetHeight(oldRect)/2);
+        animate.toValue = @(layer.cornerRadius);
+        [layer addAnimation:animate forKey:@"CornerRadiusAnimationKey"];
+    }
+}
+
+#pragma mark - UIDeviceOrientationDidChangeNotification
+- (void)orientationDidChange:(NSNotification *)notify
+{
+    if (UIDeviceOrientationIsValidInterfaceOrientation([[UIDevice currentDevice] orientation])) {
+        [self updateBackgroundView];
     }
 }
 
@@ -501,6 +566,18 @@
     }
     
     return currentVC;
+}
+
+#pragma mark - create Mask layer
+- (CALayer *)createMaskLayer
+{
+    CALayer *layer = [CALayer layer];
+    layer.anchorPoint = CGPointZero;
+    layer.backgroundColor = [UIColor whiteColor].CGColor;
+    layer.masksToBounds = YES;
+    layer.shouldRasterize = YES;
+    layer.rasterizationScale = [UIScreen mainScreen].scale;
+    return layer;
 }
 
 @end

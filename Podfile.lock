@@ -1,22 +1,22 @@
 PODS:
-  - LFImagePickerController (1.6.7):
-    - LFImagePickerController/Core (= 1.6.7)
-  - LFImagePickerController/Core (1.6.7):
+  - LFImagePickerController (1.6.8.3):
+    - LFImagePickerController/Core (= 1.6.8.3)
+  - LFImagePickerController/Core (1.6.8.3):
     - LFImagePickerController/LFGifPlayer
     - LFImagePickerController/LFToGIF
-  - LFImagePickerController/LFGifPlayer (1.6.7)
-  - LFImagePickerController/LFToGIF (1.6.7)
+  - LFImagePickerController/LFGifPlayer (1.6.8.3)
+  - LFImagePickerController/LFToGIF (1.6.8.3)
 
 DEPENDENCIES:
   - LFImagePickerController
 
 SPEC REPOS:
-  https://github.com/cocoapods/specs.git:
+  trunk:
     - LFImagePickerController
 
 SPEC CHECKSUMS:
-  LFImagePickerController: 063b35fe6a41ac6cc905fda91c021191cd63b3eb
+  LFImagePickerController: 030c59d6776d8e9c1423e18a1c75c058106c6215
 
 PODFILE CHECKSUM: d9c09d26a9fa7e484f4fd6b2875979c4f3e3ef1d
 
-COCOAPODS: 1.7.5
+COCOAPODS: 1.8.4

@@ -12,7 +12,6 @@
 #import "LFPhotoPreviewController.h"
 
 #import "LFImagePickerHeader.h"
-#import "UIView+LFFrame.h"
 #import "UIView+LFAnimate.h"
 #import "UIImage+LFCommon.h"
 #import "UIImage+LF_Format.h"
@@ -24,7 +23,7 @@
 #import "LFAssetManager+SaveAlbum.h"
 #import "LFAssetManager+Simple.h"
 
-#import "LFAblumTitleView.h"
+#import "LFAlbumTitleView.h"
 
 #ifdef LF_MEDIAEDIT
 #import "LFPhotoEditManager.h"
@@ -35,9 +34,14 @@
 
 #import <MobileCoreServices/UTCoreTypes.h>
 
-#define kBottomToolBarHeight 50.f
+CGFloat const bottomToolBarHeight = 50.f;
 
 @interface LFCollectionView : UICollectionView
+
+/** 记录屏幕旋转前的数据 */
+@property (nonatomic, assign) CGPoint oldContentOffset;
+@property (nonatomic, assign) CGSize oldContentSize;
+@property (nonatomic, assign) CGRect oldCollectionViewRect;
 
 @end
 
@@ -52,7 +56,7 @@
 
 @end
 
-@interface LFPhotoPickerController ()<UICollectionViewDataSource,UICollectionViewDelegate,UIImagePickerControllerDelegate,UINavigationControllerDelegate>
+@interface LFPhotoPickerController ()<UICollectionViewDataSource,UICollectionViewDelegate,UIImagePickerControllerDelegate,UINavigationControllerDelegate, LFPhotoPreviewControllerPullDelegate>
 {
     
     UIView *_bottomSubToolBar;
@@ -69,7 +73,7 @@
 @property (nonatomic, weak) LFCollectionView *collectionView;
 @property (nonatomic, weak) UIView *bottomToolBar;
 
-@property (nonatomic, weak) LFAblumTitleView *titleView;
+@property (nonatomic, weak) LFAlbumTitleView *titleView;
 
 @property (nonatomic, strong) NSMutableArray <LFAlbum *>*albumArr;
 @property (nonatomic, strong) NSMutableArray <LFAsset *>*models;
@@ -77,9 +81,16 @@
 @property (nonatomic, assign) BOOL isPhotoPreview;
 @property (nonatomic, copy) void (^doneButtonClickBlock)(void);
 
+/** 加载动画延时 */
+@property (nonatomic, assign) float animtionDelayTime;
+/** 记录动画次数 */
+@property (nonatomic, assign) int animtionTimes;
+/** 记录动画完成次数 */
+@property (nonatomic, assign) int animtionFinishTimes;
+
 @end
 
-@interface LFPhotoPickerController () <UIViewControllerPreviewingDelegate, PHPhotoLibraryChangeObserver>
+@interface LFPhotoPickerController () <UIViewControllerPreviewingDelegate, PHPhotoLibraryChangeObserver, UIAdaptivePresentationControllerDelegate>
 
 @end
 
@@ -101,7 +112,7 @@
     [super viewDidLoad];
     // Do any additional setup after loading the view.
     LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
-    self.view.backgroundColor = [UIColor whiteColor];
+    self.view.backgroundColor = [UIColor colorWithRed:47.0/255.0 green:47.0/255.0 blue:47.0/255.0 alpha:1.0];
     
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wundeclared-selector"
@@ -189,7 +200,7 @@
 - (void)viewWillLayoutSubviews
 {
     [super viewWillLayoutSubviews];
-    CGFloat toolbarHeight = kBottomToolBarHeight;
+    CGFloat toolbarHeight = bottomToolBarHeight;
     if (@available(iOS 11.0, *)) {
         toolbarHeight += self.view.safeAreaInsets.bottom;
     }
@@ -203,8 +214,8 @@
     _collectionView.frame = collectionViewRect;
     
     /* 适配底部栏 */
-    CGFloat yOffset = self.view.height - toolbarHeight;
-    _bottomToolBar.frame = CGRectMake(0, yOffset, self.view.width, toolbarHeight);
+    CGFloat yOffset = self.view.frame.size.height - toolbarHeight;
+    _bottomToolBar.frame = CGRectMake(0, yOffset, self.view.frame.size.width, toolbarHeight);
     
     CGRect bottomToolbarRect = _bottomToolBar.bounds;
     if (@available(iOS 11.0, *)) {
@@ -221,6 +232,15 @@
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
+    
+    if (@available(iOS 13.0, *)) {
+        LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
+        if (imagePickerVc.modalPresentationStyle == UIModalPresentationPageSheet) {
+            imagePickerVc.presentationController.delegate = self;
+            // 手动接收dismiss
+            self.modalInPresentation = YES;
+        }
+    }
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -233,6 +253,7 @@
     if (imagePickerVc.syncAlbum) {
         [[PHPhotoLibrary sharedPhotoLibrary] unregisterChangeObserver:self];    //移除监听者
     }
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (void)dealloc
@@ -254,7 +275,7 @@
     
     if (self.model) {
         /** 创建titleView */
-        LFAblumTitleView *titleView = [[LFAblumTitleView alloc] init];
+        LFAlbumTitleView *titleView = [[LFAlbumTitleView alloc] init];
         titleView.albumArr = self.albumArr;
         titleView.selectImageName = imagePickerVc.ablumSelImageName;
         titleView.title = imagePickerVc.defaultAlbumName;
@@ -264,6 +285,7 @@
             if (![weakSelf.model isEqual:album]) {
                 weakSelf.model = album;
                 [weakSelf loadAlbumData:^{
+                    weakSelf.animtionDelayTime = 0.015;
                     [weakSelf.collectionView reloadData];
                     [weakSelf scrollCollectionViewToBottom];
                 }];
@@ -283,6 +305,9 @@
         [self configCollectionView];
         [self configBottomToolBar];
         [self scrollCollectionViewToBottom];
+        
+        // 监听屏幕旋转
+        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(orientationDidChange:) name:UIDeviceOrientationDidChangeNotification object:nil];
     }
     
 }
@@ -327,14 +352,14 @@
     
     UICollectionViewFlowLayout *layout = [[UICollectionViewFlowLayout alloc] init];
     CGFloat margin = isiPad ? 15 : 2;
-    CGFloat screenWidth = MIN(self.view.width, self.view.height);
+    CGFloat screenWidth = MIN(self.view.frame.size.width, self.view.frame.size.height);
     CGFloat itemWH = (screenWidth - (imagePickerVc.columnNumber + 1) * margin) / imagePickerVc.columnNumber;
     layout.itemSize = CGSizeMake(itemWH, itemWH);
     layout.minimumInteritemSpacing = margin;
     layout.minimumLineSpacing = margin;
     
     CGRect collectionViewRect = [self viewFrameWithoutNavigation];
-    CGFloat toolbarHeight = kBottomToolBarHeight;
+    CGFloat toolbarHeight = bottomToolBarHeight;
     if (@available(iOS 11.0, *)) {
         toolbarHeight += self.view.safeAreaInsets.bottom;
     }
@@ -346,17 +371,14 @@
     [collectionView registerClass:[LFAssetCameraCell class] forCellWithReuseIdentifier:@"LFAssetCameraCell"];
     
     collectionView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    collectionView.backgroundColor = [UIColor colorWithRed:47.0/255.0 green:47.0/255.0 blue:47.0/255.0 alpha:1.0];
+    collectionView.backgroundColor = [UIColor clearColor];
     collectionView.alwaysBounceHorizontal = NO;
+    collectionView.alwaysBounceVertical = YES;
     collectionView.contentInset = UIEdgeInsetsMake(margin, margin, margin, margin);
     collectionView.dataSource = self;
     collectionView.delegate = self;
-    
-    if (_showTakePhotoBtn) {
-        collectionView.contentSize = CGSizeMake(self.view.width, ((_models.count + imagePickerVc.columnNumber) / imagePickerVc.columnNumber) * self.view.width);
-    } else {
-        collectionView.contentSize = CGSizeMake(self.view.width, ((_models.count + imagePickerVc.columnNumber - 1) / imagePickerVc.columnNumber) * self.view.width);
-    }
+
+    //    self.animtionDelayTime = 0.015;
     [self.view addSubview:collectionView];
     _collectionView = collectionView;
 }
@@ -369,18 +391,18 @@
     
     LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
     
-    CGFloat height = kBottomToolBarHeight;
+    CGFloat height = bottomToolBarHeight;
     if (@available(iOS 11.0, *)) {
         height += self.view.safeAreaInsets.bottom;
     }
-    CGFloat yOffset = self.view.height - height;
+    CGFloat yOffset = self.view.frame.size.height - height;
     
     UIColor *toolbarBGColor = imagePickerVc.toolbarBgColor;
     UIColor *toolbarTitleColorNormal = imagePickerVc.toolbarTitleColorNormal;
     UIColor *toolbarTitleColorDisabled = imagePickerVc.toolbarTitleColorDisabled;
     UIFont *toolbarTitleFont = imagePickerVc.toolbarTitleFont;
     
-    UIView *bottomToolBar = [[UIView alloc] initWithFrame:CGRectMake(0, yOffset, self.view.width, height)];
+    UIView *bottomToolBar = [[UIView alloc] initWithFrame:CGRectMake(0, yOffset, self.view.frame.size.width, height)];
     bottomToolBar.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
     bottomToolBar.backgroundColor = toolbarBGColor;
     
@@ -412,7 +434,7 @@
         CGSize previewSize = [imagePickerVc.previewBtnTitleStr boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX) options:NSStringDrawingUsesFontLeading attributes:@{NSFontAttributeName:toolbarTitleFont} context:nil].size;
         previewSize.width += 10.f;
         _previewButton = [UIButton buttonWithType:UIButtonTypeCustom];
-        _previewButton.frame = CGRectMake(buttonX, 0, previewSize.width, kBottomToolBarHeight);
+        _previewButton.frame = CGRectMake(buttonX, 0, previewSize.width, bottomToolBarHeight);
         _previewButton.autoresizingMask = UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleBottomMargin;
         [_previewButton addTarget:self action:@selector(previewButtonClick) forControlEvents:UIControlEventTouchUpInside];
         _previewButton.titleLabel.font = toolbarTitleFont;
@@ -430,7 +452,7 @@
         CGFloat fullImageWidth = [imagePickerVc.fullImageBtnTitleStr boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX) options:NSStringDrawingUsesFontLeading attributes:@{NSFontAttributeName:toolbarTitleFont} context:nil].size.width;
         _originalPhotoButton = [UIButton buttonWithType:UIButtonTypeCustom];
         CGFloat originalButtonW = fullImageWidth + 56;
-        _originalPhotoButton.frame = CGRectMake((CGRectGetWidth(bottomToolBar.frame)-originalButtonW)/2, 0, originalButtonW, kBottomToolBarHeight);
+        _originalPhotoButton.frame = CGRectMake((CGRectGetWidth(bottomToolBar.frame)-originalButtonW)/2, 0, originalButtonW, bottomToolBarHeight);
         _originalPhotoButton.autoresizingMask = UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleBottomMargin;
         _originalPhotoButton.imageEdgeInsets = UIEdgeInsetsMake(0, -10, 0, 0);
         [_originalPhotoButton addTarget:self action:@selector(originalPhotoButtonClick) forControlEvents:UIControlEventTouchUpInside];
@@ -446,7 +468,7 @@
         [_originalPhotoButton setImage:bundleImageNamed(imagePickerVc.photoOriginDefImageName) forState:UIControlStateDisabled];
         
         _originalPhotoLabel = [[UILabel alloc] init];
-        _originalPhotoLabel.frame = CGRectMake(fullImageWidth + 46, 0, 80, kBottomToolBarHeight);
+        _originalPhotoLabel.frame = CGRectMake(fullImageWidth + 46, 0, 80, bottomToolBarHeight);
         _originalPhotoLabel.autoresizingMask = UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleBottomMargin;
         _originalPhotoLabel.textAlignment = NSTextAlignmentLeft;
         _originalPhotoLabel.font = toolbarTitleFont;
@@ -461,7 +483,7 @@
     doneSize.width += 10;
     
     _doneButton = [UIButton buttonWithType:UIButtonTypeCustom];
-    _doneButton.frame = CGRectMake(self.view.width - doneSize.width - 12, (kBottomToolBarHeight-doneSize.height)/2, doneSize.width, doneSize.height);
+    _doneButton.frame = CGRectMake(self.view.frame.size.width - doneSize.width - 12, (bottomToolBarHeight-doneSize.height)/2, doneSize.width, doneSize.height);
     _doneButton.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleBottomMargin;
     _doneButton.titleLabel.font = toolbarTitleFont;
     [_doneButton addTarget:self action:@selector(doneButtonClick) forControlEvents:UIControlEventTouchUpInside];
@@ -476,7 +498,7 @@
     
     UIView *divide = [[UIView alloc] init];
     divide.backgroundColor = [UIColor colorWithWhite:1.f alpha:0.1f];
-    divide.frame = CGRectMake(0, 0, self.view.width, 1);
+    divide.frame = CGRectMake(0, 0, self.view.frame.size.width, 1);
     divide.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleBottomMargin;
     
     [bottomSubToolBar addSubview:_editButton];
@@ -886,7 +908,7 @@
     LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
     
     cell.photoDefImageName = imagePickerVc.photoDefImageName;
-    cell.photoSelImageName = imagePickerVc.photoNumberIconImageName;
+    cell.photoSelImageName = imagePickerVc.photoSelImageName;
     cell.displayGif = imagePickerVc.allowPickingType&LFPickingMediaTypeGif;
     cell.displayLivePhoto = imagePickerVc.allowPickingType&LFPickingMediaTypeLivePhoto;
     cell.displayPhotoName = imagePickerVc.displayImageFilename;
@@ -939,6 +961,24 @@
     }
     LFPhotoPreviewController *photoPreviewVc = [[LFPhotoPreviewController alloc] initWithModels:[_models copy] index:index];
     [self pushPhotoPrevireViewController:photoPreviewVc];
+}
+
+- (void)collectionView:(UICollectionView *)collectionView willDisplayCell:(UICollectionViewCell *)cell forItemAtIndexPath:(NSIndexPath *)indexPath
+{
+    if (self.animtionDelayTime > 0) {
+        cell.alpha = 0;
+        [UIView animateWithDuration:0.25 delay:self.animtionTimes++ * self.animtionDelayTime options:UIViewAnimationOptionCurveEaseInOut animations:^{
+            cell.alpha = 1.0;
+        } completion:^(BOOL finished) {
+            self.animtionFinishTimes++;
+            if (self.animtionTimes == self.animtionFinishTimes) {
+                // finish
+                self.animtionDelayTime = 0;
+                self.animtionTimes = 0;
+                self.animtionFinishTimes = 0;
+            }
+        }];
+    }
 }
 
 #pragma mark - 拍照图片后执行代理
@@ -1023,6 +1063,67 @@
     [photoPreviewVc endPreviewing];
 }
 
+#pragma mark - LFPhotoPreviewControllerPullDelegate
+- (UIView *)lf_PhotoPreviewControllerPullBlackgroundView;
+{
+    return [self.navigationController.view snapshotViewAfterScreenUpdates:YES];
+}
+- (CGRect)lf_PhotoPreviewControllerPullItemRect:(LFAsset *)asset
+{
+    if (asset) {
+        if (asset.type == LFAssetMediaTypePhoto) { // 仅处理图片
+            NSInteger index = [self.models indexOfObject:asset];
+            if (index != NSNotFound) {
+                NSIndexPath *indexPath = [NSIndexPath indexPathForRow:index inSection:0];
+                UICollectionViewCell *cell = [self.collectionView cellForItemAtIndexPath:indexPath];
+                if (cell) {
+                    CGRect rect = [self.collectionView convertRect:cell.frame toView:self.view];
+                    // 过滤顶部与底部遮挡的部分
+                    if (CGRectContainsRect(self.collectionView.frame, rect)) {
+                        return rect;
+                    }
+                }
+            }
+        }
+    }
+    return CGRectZero;
+}
+
+#pragma mark - UIAdaptivePresentationControllerDelegate
+- (void)presentationControllerDidAttemptToDismiss:(UIPresentationController *)presentationController
+{
+    LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
+    if (_doneButton.enabled) {
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:nil message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+        
+        [alert addAction:[UIAlertAction actionWithTitle:imagePickerVc.doneBtnTitleStr style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            [self doneButtonClick];
+        }]];
+        
+        [alert addAction:[UIAlertAction actionWithTitle:@"Discard Select" style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wundeclared-selector"
+            if ([imagePickerVc respondsToSelector:@selector(cancelButtonClick)]) {
+                [imagePickerVc performSelector:@selector(cancelButtonClick)];
+            }
+#pragma clang diagnostic pop
+        }]];
+        
+        [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleDefault handler:nil]];
+        
+        // The popover should point at the Cancel button
+        alert.popoverPresentationController.barButtonItem = self.navigationItem.leftBarButtonItem;
+        
+        [self presentViewController:alert animated:YES completion:nil];
+    } else {
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wundeclared-selector"
+        if ([imagePickerVc respondsToSelector:@selector(cancelButtonClick)]) {
+            [imagePickerVc performSelector:@selector(cancelButtonClick)];
+        }
+        #pragma clang diagnostic pop
+    }
+}
 
 #pragma mark - Private Method
 
@@ -1192,9 +1293,16 @@
 
 - (void)pushPhotoPrevireViewController:(LFPhotoPreviewController *)photoPreviewVc {
     
+    LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
+    if (imagePickerVc.modalPresentationStyle == UIModalPresentationFullScreen && !photoPreviewVc.isPhotoPreview) {
+        UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
+        if (orientation == UIInterfaceOrientationPortrait) { /** 除了竖屏进去时，其他状态也禁止它 */
+            photoPreviewVc.pulldelegate = self;
+        }
+    }
     __weak typeof(self) weakSelf = self;
     [photoPreviewVc setBackButtonClickBlock:^{
-        [weakSelf.collectionView reloadData];
+        [weakSelf.collectionView reloadItemsAtIndexPaths:weakSelf.collectionView.indexPathsForVisibleItems];
         [weakSelf refreshBottomToolBarStatus];
     }];
     [photoPreviewVc setDoneButtonClickBlock:^{
@@ -1471,6 +1579,56 @@
             }
         }
     });
+}
+
+#pragma mark - UIContentContainer
+- (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id <UIViewControllerTransitionCoordinator>)coordinator
+{
+    _collectionView.oldContentOffset = _collectionView.contentOffset;
+    _collectionView.oldContentSize = _collectionView.contentSize;
+    _collectionView.oldCollectionViewRect = _collectionView.frame;
+}
+
+- (void)willRotateToInterfaceOrientation:(UIInterfaceOrientation)toInterfaceOrientation duration:(NSTimeInterval)duration
+{
+    _collectionView.oldContentOffset = _collectionView.contentOffset;
+    _collectionView.oldContentSize = _collectionView.contentSize;
+    _collectionView.oldCollectionViewRect = _collectionView.frame;
+}
+
+#pragma mark - UIDeviceOrientationDidChangeNotification
+- (void)orientationDidChange:(NSNotification *)notify
+{
+    if (UIDeviceOrientationIsValidInterfaceOrientation([[UIDevice currentDevice] orientation])) {
+        
+        // 计算collectionView旋转后的相对位置
+        CGRect collectionViewRect = _collectionView.frame;
+        CGRect oldCollectionViewRect = _collectionView.oldCollectionViewRect;
+        CGPoint oldContentOffset = _collectionView.oldContentOffset;
+        CGSize oldContentSize = _collectionView.oldContentSize;
+        
+        if (!CGRectEqualToRect(oldCollectionViewRect, CGRectZero) && !CGRectEqualToRect(collectionViewRect, oldCollectionViewRect)) {
+            UICollectionViewFlowLayout *flowLayout = (UICollectionViewFlowLayout *)_collectionView.collectionViewLayout;
+
+            CGFloat itemWH = flowLayout.itemSize.width;
+            CGFloat margin = flowLayout.minimumLineSpacing;
+            // 一行的数量
+            int columnNumber = (int)(collectionViewRect.size.width / (itemWH + margin));
+            // 总数/每行的数量=总行数
+            int lineNumber = (int)((_models.count + columnNumber - 1 + (_showTakePhotoBtn ? 1 : 0)) / columnNumber);
+            // 总行数*每行高度+总行数之间的间距 (上下间距 不在contentSize范围内)
+            CGFloat newContentSizeHeight = lineNumber * itemWH + (lineNumber - 1) * margin;// + margin * 2;
+
+            CGFloat contentOffsetY = -_collectionView.contentInset.top;
+            if (oldContentOffset.y+_collectionView.contentInset.top > 0) { // 临界点横屏时不用计算
+                CGFloat ratio = (oldContentOffset.y + oldCollectionViewRect.size.height) / oldContentSize.height;
+                contentOffsetY = newContentSizeHeight * ratio - collectionViewRect.size.height;
+            }
+            /** 限制有效范围 */
+            contentOffsetY = MIN(MAX(-_collectionView.contentInset.top, contentOffsetY), newContentSizeHeight-collectionViewRect.size.height+_collectionView.contentInset.top);
+            [_collectionView setContentOffset:CGPointMake(_collectionView.contentOffset.x, contentOffsetY) animated:NO];
+        }
+    }
 }
 
 @end

@@ -10,7 +10,6 @@
 #import "LFImagePickerHeader.h"
 #import "LFAsset.h"
 #import "LFAssetManager.h"
-#import "UIView+LFFrame.h"
 #import "UIView+LFAnimate.h"
 #import "UIImage+LFCommon.h"
 #ifdef LF_MEDIAEDIT
@@ -25,6 +24,9 @@
 #define kAdditionalSize (isiPad ? 15 : 0)
 #define kVideoBoomHeight (20.f + kAdditionalSize)
 
+#define LFAssetCell_markNoSelColor [UIColor colorWithWhite:1.f alpha:0.5f]
+#define LFAssetCell_markSelColor [UIColor colorWithWhite:0.f alpha:0.5f]
+
 @interface LFAssetCell ()
 @property (weak, nonatomic) UIImageView *imageView;       // The photo / 照片
 @property (weak, nonatomic) UIImageView *selectImageView;
@@ -35,7 +37,10 @@
 @property (nonatomic, weak) UIImageView *videoImgView;
 @property (weak, nonatomic) UILabel *timeLength;
 
+@property (weak, nonatomic) UIView *maskSelectView;
 @property (weak, nonatomic) UIView *maskHitView;
+
+@property (assign, nonatomic) CGRect selectPhotoButtonRect;
 @end
 
 @implementation LFAssetCell
@@ -53,15 +58,23 @@
     
     /** 背景图片 */
     UIImageView *imageView = [[UIImageView alloc] init];
-    imageView.frame = CGRectMake(0, 0, self.width, self.height);
+    imageView.frame = CGRectMake(0, 0, self.frame.size.width, self.frame.size.height);
     imageView.contentMode = UIViewContentModeScaleAspectFill;
     imageView.clipsToBounds = YES;
     [self.contentView addSubview:imageView];
     _imageView = imageView;
     
+    /** 选中蒙蔽层 */
+    UIView *maskSelectView = [[UIView alloc] init];
+    maskSelectView.backgroundColor = LFAssetCell_markSelColor;
+    maskSelectView.frame = self.bounds;
+    maskSelectView.hidden = YES;
+    [self.contentView addSubview:maskSelectView];
+    _maskSelectView = maskSelectView;
+    
     /** 底部状态栏 */
     UIView *bottomView = [[UIView alloc] init];
-    bottomView.frame = CGRectMake(0, self.height - kVideoBoomHeight, self.width, kVideoBoomHeight);
+    bottomView.frame = CGRectMake(0, self.frame.size.height - kVideoBoomHeight, self.frame.size.width, kVideoBoomHeight);
     [self.contentView addSubview:bottomView];
     CAGradientLayer* gradientLayer = [CAGradientLayer layer];
     gradientLayer.frame = bottomView.bounds;
@@ -74,33 +87,36 @@
     
     /** 编辑标记 */
     UIImageView *editMaskImageView = [[UIImageView alloc] init];
-    CGRect frame = CGRectMake(5, 5, 13.5 + kAdditionalSize, 11 + kAdditionalSize);
+    CGRect frame = CGRectMake(8, 8, 27*0.7 + kAdditionalSize, 22*0.7 + kAdditionalSize);
     editMaskImageView.frame = frame;
     [editMaskImageView setImage:bundleImageNamed(@"contacts_add_myablum")];
     editMaskImageView.contentMode = UIViewContentModeScaleAspectFit;
     [self.contentView addSubview:editMaskImageView];
     _editMaskImageView = editMaskImageView;
     
-    CGFloat offset = 14.0;
-    CGFloat selectButtonWidth = MIN(35, self.width/2-offset);
+    CGFloat offset = self.frame.size.width/2*0.1;
+    CGFloat selectButtonWidth = self.frame.size.width/2*0.7;
     /** 选择按钮 */
     UIButton *selectPhotoButton = [[UIButton alloc] init];
-    selectPhotoButton.frame = CGRectMake(self.width - selectButtonWidth - kAdditionalSize, 0, selectButtonWidth + kAdditionalSize, selectButtonWidth + kAdditionalSize);
+    selectPhotoButton.frame = CGRectMake(self.frame.size.width - selectButtonWidth - offset, offset, selectButtonWidth, selectButtonWidth);
     [selectPhotoButton addTarget:self action:@selector(selectPhotoButtonClick:) forControlEvents:UIControlEventTouchUpInside];
     [self.contentView addSubview:selectPhotoButton];
     _selectPhotoButton = selectPhotoButton;
+    _selectPhotoButtonRect = selectPhotoButton.frame;
     
-    CGFloat selectImageScale = 4.0;
+    CGFloat selectImageScale = 5.0;
     CGFloat selectImageWidth = selectButtonWidth - selectImageScale;
     
     UIImageView *selectImageView = [[UIImageView alloc] init];
-    selectImageView.frame = CGRectMake(self.width - (selectImageWidth+2) - kAdditionalSize, 2, selectImageWidth + kAdditionalSize, selectImageWidth + kAdditionalSize);
+    selectImageView.frame = CGRectMake(0, 0, selectImageWidth, selectImageWidth);
+    selectImageView.center = selectPhotoButton.center;
+    selectImageView.contentMode = UIViewContentModeScaleAspectFit;
     [self.contentView addSubview:selectImageView];
     _selectImageView = selectImageView;
     
     /** 蒙蔽层 */
     UIView *view = [[UIButton alloc] init];
-    view.backgroundColor = [UIColor colorWithWhite:1.f alpha:0.5f];
+    view.backgroundColor = LFAssetCell_markNoSelColor;
     view.frame = self.bounds;
     view.hidden = YES;
     [self.contentView addSubview:view];
@@ -153,12 +169,13 @@
     if (model.thumbnailImage) { /** 显示自定义图片 */
         self.imageView.image = model.thumbnailImage;
     } else {
-        [[LFAssetManager manager] getPhotoWithAsset:model.asset photoWidth:self.width completion:^(UIImage *photo, NSDictionary *info, BOOL isDegraded) {
+        [[LFAssetManager manager] getPhotoWithAsset:model.asset photoWidth:self.frame.size.width completion:^(UIImage *photo, NSDictionary *info, BOOL isDegraded) {
             if ([model.asset isEqual:self.model.asset]) {
                 self.imageView.image = photo;
+                [self setTypeToSubView];
             }
             
-        } progressHandler:nil networkAccessAllowed:NO];
+        } progressHandler:nil networkAccessAllowed:YES];
     }
 }
 
@@ -183,11 +200,23 @@
             self.timeLength.text = NSLocalizedString(@"Live", nil);
             self.timeLength.textAlignment = NSTextAlignmentRight;
             _bottomView.hidden = NO;
-        } else if (self.displayPhotoName) {
-            _videoImgView.hidden = YES;
-            self.timeLength.text = [self.model.name stringByDeletingPathExtension];
-            self.timeLength.textAlignment = NSTextAlignmentCenter;
-            _bottomView.hidden = NO;
+        } else {
+            if (lf_isPiiic(self.imageView.image.size)) {
+                _videoImgView.hidden = YES;
+                self.timeLength.text = NSLocalizedString(@"Piiic", nil);
+                self.timeLength.textAlignment = NSTextAlignmentRight;
+                _bottomView.hidden = NO;
+            } else if (lf_isHor(self.imageView.image.size)) {
+                _videoImgView.hidden = YES;
+                self.timeLength.text = NSLocalizedString(@"Hor", nil);
+                self.timeLength.textAlignment = NSTextAlignmentRight;
+                _bottomView.hidden = NO;
+            } else if (self.displayPhotoName) {
+                _videoImgView.hidden = YES;
+                self.timeLength.text = [self.model.name stringByDeletingPathExtension];
+                self.timeLength.textAlignment = NSTextAlignmentCenter;
+                _bottomView.hidden = NO;
+            }
         }
     } else if (self.model.type == LFAssetMediaTypeVideo) {
         self.videoImgView.hidden = NO;
@@ -233,7 +262,7 @@
         _selectImageView.hidden = NO;
         _selectPhotoButton.frame = self.bounds;
     } else {
-        _selectPhotoButton.frame = CGRectMake(self.width - 30 - kAdditionalSize, 0, 30 + kAdditionalSize, 30 + kAdditionalSize);
+        _selectPhotoButton.frame = self.selectPhotoButtonRect;
     }
 }
 
@@ -250,6 +279,7 @@
 {
     _noSelected = noSelected;
     self.maskHitView.hidden = !noSelected;
+    self.maskHitView.backgroundColor = LFAssetCell_markNoSelColor;
 }
 
 - (void)selectPhotoButtonClick:(UIButton *)sender {
@@ -269,6 +299,7 @@
     } else {
         image = bundleImageNamed(self.photoDefImageName);
     }
+    self.maskSelectView.hidden = !isSelected;
     self.selectImageView.image = image;
     if (animated) {
         [UIView showOscillatoryAnimationWithLayer:_selectImageView.layer type:OscillatoryAnimationToBigger];
@@ -279,7 +310,7 @@
 - (UIImageView *)videoImgView {
     if (_videoImgView == nil) {
         UIImageView *videoImgView = [[UIImageView alloc] init];
-        videoImgView.frame = CGRectMake(8, 0, 18, 11);
+        videoImgView.frame = CGRectMake(8, 0, 37*0.7, 22*0.7);
         videoImgView.contentMode = UIViewContentModeScaleAspectFit;
         [videoImgView setImage:bundleImageNamed(@"fileicon_video_wall")];
         [self.bottomView addSubview:videoImgView];
@@ -291,12 +322,16 @@
 - (UILabel *)timeLength {
     if (_timeLength == nil) {
         UILabel *timeLength = [[UILabel alloc] init];
-        timeLength.font = [UIFont boldSystemFontOfSize:isiPad ? 17 : 11];
+        timeLength.font = [UIFont boldSystemFontOfSize:isiPad ? 19 : 15];
         CGFloat height = [@"A" boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, kVideoBoomHeight) options:NSStringDrawingUsesLineFragmentOrigin|NSStringDrawingUsesFontLeading attributes:@{NSFontAttributeName:timeLength.font} context:nil].size.height;
         
         CGFloat videoImageMaxX = MAX(CGRectGetMaxX(_videoImgView.frame), 8);
+        CGFloat y = (22*0.7-height)/2;
+        if (_videoImgView) {
+            y = (_videoImgView.frame.size.height-height)/2;
+        }
         
-        timeLength.frame = CGRectMake(videoImageMaxX, (11-height)/2, self.width - videoImageMaxX - 8, height);
+        timeLength.frame = CGRectMake(videoImageMaxX, y, self.frame.size.width - videoImageMaxX - 8, height);
         timeLength.textColor = [UIColor whiteColor];
         timeLength.textAlignment = NSTextAlignmentRight;
         timeLength.lineBreakMode = NSLineBreakByTruncatingHead;

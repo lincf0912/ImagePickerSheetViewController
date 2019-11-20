@@ -10,12 +10,12 @@
 #import "LFImagePickerController.h"
 #import "LFImagePickerController+property.h"
 #import "LFImagePickerHeader.h"
-#import "UIView+LFFrame.h"
 #import "UIView+LFAnimate.h"
 #import "LFPhotoPreviewCell.h"
 #import "LFPhotoPreviewGifCell.h"
 #import "LFPhotoPreviewLivePhotoCell.h"
 #import "LFPhotoPreviewVideoCell.h"
+#import "LFPhotoPreviewCell_property.h"
 #import "LFPreviewBar.h"
 #import <PhotosUI/PhotosUI.h>
 
@@ -34,14 +34,14 @@
 
 CGFloat const cellMargin = 20.f;
 CGFloat const livePhotoSignMargin = 10.f;
-CGFloat const toolbarDefaultHeight = 44.f;
-CGFloat const previewBarDefaultHeight = 64.f;
+CGFloat const toolbarDefaultHeight = 50.f;
+CGFloat const previewBarDefaultHeight = 88.f;
 CGFloat const naviTipsViewDefaultHeight = 30.f;
 
 #ifdef LF_MEDIAEDIT
-@interface LFPhotoPreviewController () <UICollectionViewDataSource,UICollectionViewDelegate,UIScrollViewDelegate,LFPhotoPreviewCellDelegate, LFPhotoEditingControllerDelegate, LFVideoEditingControllerDelegate>
+@interface LFPhotoPreviewController () <UICollectionViewDataSource,UICollectionViewDelegate,UIScrollViewDelegate,LFPhotoPreviewCellDelegate, UIAdaptivePresentationControllerDelegate, UIGestureRecognizerDelegate, LFPhotoEditingControllerDelegate, LFVideoEditingControllerDelegate>
 #else
-@interface LFPhotoPreviewController () <UICollectionViewDataSource,UICollectionViewDelegate,UIScrollViewDelegate,LFPhotoPreviewCellDelegate>
+@interface LFPhotoPreviewController () <UICollectionViewDataSource,UICollectionViewDelegate,UIScrollViewDelegate,LFPhotoPreviewCellDelegate, UIAdaptivePresentationControllerDelegate, UIGestureRecognizerDelegate>
 #endif
 {
     UIView *_naviBar;
@@ -66,7 +66,18 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
     
     UIView *_previewMainBar;
     LFPreviewBar *_previewBar;
+    
+    /** 下拉手势记录点 */
+    CGPoint _originalPoint;
+    CGPoint _beginPoint;
+    CGPoint _endPoint;
+    BOOL _isPullBegan;
+    BOOL _isPulling;
+    int _pullTimes;//允许尝试次数
+    UIView *_pullSnapshotView;
 }
+
+@property (nonatomic, weak) UIView *backgroundView;
 
 @property (nonatomic, strong) UICollectionView *collectionView;
 
@@ -83,6 +94,13 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
 
 /** 临时编辑图片(仅用于在夸页面编辑时使用，目前已移除此需求) */
 //@property (nonatomic, strong) UIImage *tempEditImage;
+
+/** 下拉手势 */
+@property (nonatomic, strong) UIPanGestureRecognizer *panGesture;
+@property (nonatomic, strong) UIView *pullBackgroundView;
+@property (nonatomic, weak) UIView *pullSnapshotSuperView; // 下拉时获取cell的展示视图，结束后要还回去。
+
+
 @end
 
 @implementation LFPhotoPreviewController
@@ -92,6 +110,12 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
     self = [super init];
     if (self) {
         self.isHiddenNavBar = YES;
+        /** 刘海屏的顶部一直会存在安全区域，window的显示区域不在刘海屏范围，调整window的层级无法遮挡状态栏。 */
+        if (@available(iOS 11.0, *)) {
+            if ([[UIApplication sharedApplication] delegate].window.safeAreaInsets.bottom > 0) {
+                self.isHiddenStatusBar = YES;
+            }
+        }
     }
     return self;
 }
@@ -134,7 +158,10 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
         [self configCustomNaviBar];
         [self configBottomToolBar];
         [self configPreviewBar];
+        [self configNaviTipsView];
         [self configLivePhotoSign];
+        [self configPullDown];
+        
         [self refreshNaviBarAndBottomBarState];
     }
 }
@@ -144,8 +171,21 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
     return _isPreviewing ? _previewNavi : (LFImagePickerController *)self.navigationController;
 }
 
+- (void)setPulldelegate:(id<LFPhotoPreviewControllerPullDelegate>)pulldelegate
+{
+    _pulldelegate = pulldelegate;
+    if ([pulldelegate respondsToSelector:@selector(lf_PhotoPreviewControllerPullBlackgroundView)]) {
+        self.pullBackgroundView = [pulldelegate lf_PhotoPreviewControllerPullBlackgroundView];
+    }
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
+    
+    UIView *backgroundView = [[UIView alloc] initWithFrame:self.view.bounds];
+    backgroundView.backgroundColor = [UIColor blackColor];
+    [self.view addSubview:backgroundView];
+    _backgroundView = backgroundView;
     
     [self checkDefaultSelectedModels];
     
@@ -156,16 +196,15 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
         [self configPreviewBar];
         [self configNaviTipsView];
         [self configLivePhotoSign];
+        [self configPullDown];
     }
-    
-    
 }
 
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
-    // 隐藏状态栏而不改变导航栏的高度
+    // 隐藏状态栏而不改变安全区域的高度
     [UIApplication sharedApplication].keyWindow.windowLevel = UIWindowLevelStatusBar + 1;
-    if (_currentIndex) [_collectionView setContentOffset:CGPointMake(_collectionView.width * _currentIndex, 0) animated:NO];
+    if (_currentIndex) [_collectionView setContentOffset:CGPointMake(_collectionView.frame.size.width * _currentIndex, 0) animated:NO];
     [self refreshNaviBarAndBottomBarState];
     
     if (self.isPreviewing == NO) {
@@ -176,6 +215,19 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     [UIApplication sharedApplication].keyWindow.windowLevel = UIWindowLevelNormal;
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    
+    if (@available(iOS 13.0, *)) {
+        LFImagePickerController *imagePickerVc = [self navi];
+        if (imagePickerVc.modalPresentationStyle == UIModalPresentationPageSheet) {
+            imagePickerVc.presentationController.delegate = self;
+            // 手动接收dismiss
+            self.modalInPresentation = YES;
+        }
+    }
 }
 
 - (void)viewDidDisappear:(BOOL)animated
@@ -190,6 +242,11 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
 {
     [super viewWillLayoutSubviews];
     
+    if (_isPulling) return;
+    
+    UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
+    _panGesture.enabled = (orientation == UIInterfaceOrientationPortrait);
+    
     UIEdgeInsets ios11Safeinsets = UIEdgeInsetsZero;
     if (@available(iOS 11.0, *)) {
         ios11Safeinsets = self.view.safeAreaInsets;
@@ -203,31 +260,48 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
         naviBarHeight += CGRectGetHeight([UIApplication sharedApplication].statusBarFrame);
     }
 
-    _naviBar.frame = CGRectMake(0, 0, self.view.width, naviBarHeight);
-    CGRect naviSubBarRect = CGRectMake(0, naviBarHeight-naviSubBarHeight, self.view.width, naviSubBarHeight);
+    _naviBar.frame = CGRectMake(0, 0, self.view.frame.size.width, naviBarHeight);
+    CGRect naviSubBarRect = CGRectMake(0, naviBarHeight-naviSubBarHeight, self.view.frame.size.width, naviSubBarHeight);
     if (@available(iOS 11.0, *)) {
         naviSubBarRect.origin.x += ios11Safeinsets.left;
         naviSubBarRect.size.width -= ios11Safeinsets.left + ios11Safeinsets.right;
     }
     _naviSubBar.frame = naviSubBarRect;
-    _backButton.height = CGRectGetHeight(_naviSubBar.frame);
-    _selectButton.y = (CGRectGetHeight(_naviSubBar.frame)-CGRectGetHeight(_selectButton.frame))/2;
-    _titleLabel.y = (CGRectGetHeight(_naviSubBar.frame)-CGRectGetHeight(_titleLabel.frame))/2;
+    
+    {
+        CGRect tmpRect = _backButton.frame;
+        tmpRect.size.height = CGRectGetHeight(_naviSubBar.frame);
+        _backButton.frame = tmpRect;
+    }
+    {
+        CGRect tmpRect = _selectButton.frame;
+        tmpRect.origin.y = (CGRectGetHeight(_naviSubBar.frame)-CGRectGetHeight(_selectButton.frame))/2;
+        _selectButton.frame = tmpRect;
+    }
+    {
+        CGRect tmpRect = _titleLabel.frame;
+        tmpRect.origin.y = (CGRectGetHeight(_naviSubBar.frame)-CGRectGetHeight(_titleLabel.frame))/2;
+        _titleLabel.frame = tmpRect;
+    }
     
     /** 适配提示栏 */
-    _naviTipsView.frame = CGRectMake(0, CGRectGetMaxY(_naviBar.frame), self.view.width, naviTipsViewDefaultHeight);
+    _naviTipsView.frame = CGRectMake(0, CGRectGetMaxY(_naviBar.frame), self.view.frame.size.width, naviTipsViewDefaultHeight);
     
     /* 适配标记图标 */
     CGFloat livePhotoSignViewY = (_naviTipsView.alpha == 0) ? CGRectGetMaxY(_naviBar.frame) : CGRectGetMaxY(_naviTipsView.frame);
-    _livePhotoSignView.x = CGRectGetMinX(_naviBar.frame) + livePhotoSignMargin + ios11Safeinsets.left;
-    _livePhotoSignView.y = livePhotoSignViewY + livePhotoSignMargin;
+    {
+        CGRect tempRect = _livePhotoSignView.frame;
+        tempRect.origin.x = CGRectGetMinX(_naviBar.frame) + livePhotoSignMargin + ios11Safeinsets.left;
+        tempRect.origin.y = livePhotoSignViewY + livePhotoSignMargin;
+        _livePhotoSignView.frame = tempRect;
+    }
     
     /* 适配底部栏 */
     CGFloat toolbarHeight = toolbarDefaultHeight;
     if (@available(iOS 11.0, *)) {
         toolbarHeight += self.view.safeAreaInsets.bottom;
     }
-    _toolBar.frame = CGRectMake(0, self.view.height - toolbarHeight, self.view.width, toolbarHeight);
+    _toolBar.frame = CGRectMake(0, self.view.frame.size.height - toolbarHeight, self.view.frame.size.width, toolbarHeight);
     CGRect toolbarRect = _toolBar.bounds;
     if (@available(iOS 11.0, *)) {
         toolbarRect.origin.x += self.view.safeAreaInsets.left;
@@ -236,7 +310,7 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
     _toolSubBar.frame = toolbarRect;
     
     /* 适配预览栏 */
-    _previewMainBar.frame = CGRectMake(0, _toolBar.y - previewBarDefaultHeight, self.view.width, previewBarDefaultHeight);;
+    _previewMainBar.frame = CGRectMake(0, _toolBar.frame.origin.y - previewBarDefaultHeight, self.view.frame.size.width, previewBarDefaultHeight);
     CGRect previewBarRect = _previewMainBar.bounds;
     if (@available(iOS 11.0, *)) {
         previewBarRect.origin.x += self.view.safeAreaInsets.left;
@@ -244,12 +318,13 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
     }
     _previewBar.frame = previewBarRect;
 
+    _backgroundView.frame = self.view.bounds;
     /** 重新排版 */
     [_collectionView.collectionViewLayout invalidateLayout];
     /* 适配宫格视图 */
-    _collectionView.frame = CGRectMake(0, 0, self.view.width+cellMargin, self.view.height);
-    _collectionView.contentSize = CGSizeMake(_models.count * (_collectionView.width), 0);
-    if (_models.count) [_collectionView setContentOffset:CGPointMake((_collectionView.width) * _currentIndex, 0) animated:NO];
+    _collectionView.frame = CGRectMake(0, 0, self.view.frame.size.width+cellMargin, self.view.frame.size.height);
+    _collectionView.contentSize = CGSizeMake(_models.count * (_collectionView.frame.size.width), 0);
+    if (_models.count) [_collectionView setContentOffset:CGPointMake((_collectionView.frame.size.width) * _currentIndex, 0) animated:NO];
 }
 
 - (void)dealloc
@@ -266,10 +341,10 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
         naviBarHeight += self.view.safeAreaInsets.top;
     }
     
-    _naviBar = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.width, naviBarHeight)];
+    _naviBar = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, naviBarHeight)];
     _naviBar.backgroundColor = imagePickerVc.previewNaviBgColor;
     
-    _naviSubBar = [[UIView alloc] initWithFrame:CGRectMake(0, naviBarHeight-naviSubBarHeight, self.view.width, naviSubBarHeight)];
+    _naviSubBar = [[UIView alloc] initWithFrame:CGRectMake(0, naviBarHeight-naviSubBarHeight, self.view.frame.size.width, naviSubBarHeight)];
     [_naviBar addSubview:_naviSubBar];
     
     _backButton = [[UIButton alloc] initWithFrame:CGRectMake(0, 0, 50, CGRectGetHeight(_naviSubBar.frame))];
@@ -280,7 +355,11 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
         [_backButton setTitle:imagePickerVc.cancelBtnTitleStr forState:UIControlStateNormal];
         _backButton.titleLabel.font = imagePickerVc.barItemTextFont;
         CGFloat editCancelWidth = [imagePickerVc.cancelBtnTitleStr boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX) options:NSStringDrawingUsesFontLeading attributes:@{NSFontAttributeName:_backButton.titleLabel.font} context:nil].size.width + 2;
-        _backButton.width = editCancelWidth+8;
+        {
+            CGRect tempRect = _backButton.frame;
+            tempRect.size.width = editCancelWidth+8;
+            _backButton.frame = tempRect;
+        }
         _backButton.titleEdgeInsets = UIEdgeInsetsMake(0, 8, 0, 0);
     } else {
         UIImage *image = bundleImageNamed(@"navigationbar_back_arrow");
@@ -303,7 +382,7 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
         _titleLabel.font = imagePickerVc.naviTitleFont;
         CGFloat height = [@"A" boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGRectGetHeight(_naviSubBar.frame)) options:NSStringDrawingUsesLineFragmentOrigin|NSStringDrawingUsesFontLeading attributes:@{NSFontAttributeName:_titleLabel.font} context:nil].size.height;
         
-        CGFloat titleMargin = MAX(_backButton.width, _selectButton.width) + 8;
+        CGFloat titleMargin = MAX(_backButton.frame.size.width, _selectButton.frame.size.width) + 8;
         
         _titleLabel.frame = CGRectMake(titleMargin, (CGRectGetHeight(_naviSubBar.frame)-height)/2, CGRectGetWidth(_naviSubBar.frame) - titleMargin * 2, height);
         _titleLabel.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
@@ -329,11 +408,11 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
         toolbarHeight += self.view.safeAreaInsets.bottom;
     }
     
-    _toolBar = [[UIView alloc] initWithFrame:CGRectMake(0, self.view.height - toolbarHeight, self.view.width, toolbarHeight)];
+    _toolBar = [[UIView alloc] initWithFrame:CGRectMake(0, self.view.frame.size.height - toolbarHeight, self.view.frame.size.width, toolbarHeight)];
     _toolBar.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleBottomMargin;
     _toolBar.backgroundColor = toolbarBGColor;
     
-    UIView *toolSubBar = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.width, toolbarDefaultHeight)];
+    UIView *toolSubBar = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, toolbarDefaultHeight)];
     toolSubBar.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleBottomMargin;
     _toolSubBar = toolSubBar;
     
@@ -413,7 +492,7 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
     
     UIView *divide = [[UIView alloc] init];
     divide.backgroundColor = [UIColor colorWithWhite:1.f alpha:0.1f];
-    divide.frame = CGRectMake(0, 0, self.view.width, 1);
+    divide.frame = CGRectMake(0, 0, self.view.frame.size.width, 1);
     divide.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleBottomMargin;
     
     [toolSubBar addSubview:_editButton];
@@ -428,14 +507,14 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
     
     LFImagePickerController *imagePickerVc = [self navi];
     
-    UIView *previewMainBar = [[UIView alloc] initWithFrame:CGRectMake(0, _toolBar.y - previewBarDefaultHeight, self.view.width, previewBarDefaultHeight)];
+    UIView *previewMainBar = [[UIView alloc] initWithFrame:CGRectMake(0, _toolBar.frame.origin.y - previewBarDefaultHeight, self.view.frame.size.width, previewBarDefaultHeight)];
     previewMainBar.backgroundColor = imagePickerVc.toolbarBgColor;
     _previewMainBar = previewMainBar;
     
-    _previewBar = [[LFPreviewBar alloc] initWithFrame:CGRectMake(0, 0, self.view.width, previewBarDefaultHeight)];
+    _previewBar = [[LFPreviewBar alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, previewBarDefaultHeight)];
     _previewBar.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin;
     _previewBar.backgroundColor = [UIColor clearColor];
-    _previewBar.borderWidth = 2.f;
+    _previewBar.borderWidth = 4.f;
     _previewBar.borderColor = imagePickerVc.oKButtonTitleColorNormal;
     _previewBar.dataSource = [imagePickerVc.selectedModels copy];
     /** 预览栏默认全选 */
@@ -536,9 +615,9 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
 - (void)configNaviTipsView {
     
     LFImagePickerController *imagePickerVc = [self navi];
-    _naviTipsView = [[UIView alloc] initWithFrame:CGRectMake(0, CGRectGetMaxY(_naviBar.frame), self.view.width, naviTipsViewDefaultHeight)];
+    _naviTipsView = [[UIView alloc] initWithFrame:CGRectMake(0, CGRectGetMaxY(_naviBar.frame), self.view.frame.size.width, naviTipsViewDefaultHeight)];
     _naviTipsView.backgroundColor = imagePickerVc.previewNaviBgColor;
-    _naviTipsLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 0, self.view.width-20, naviTipsViewDefaultHeight)];
+    _naviTipsLabel = [[UILabel alloc] initWithFrame:CGRectMake(20, 0, self.view.frame.size.width-20, naviTipsViewDefaultHeight)];
     _naviTipsLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     _naviTipsLabel.font = imagePickerVc.naviTipsFont;
     _naviTipsLabel.textColor = imagePickerVc.naviTipsTextColor;
@@ -548,7 +627,7 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
     
     UIView *divide = [[UIView alloc] init];
     divide.backgroundColor = [UIColor colorWithWhite:1.f alpha:0.1f];
-    divide.frame = CGRectMake(0, 0, self.view.width, 1);
+    divide.frame = CGRectMake(0, 0, self.view.frame.size.width, 1);
     divide.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleBottomMargin;
     [_naviTipsView addSubview:divide];
     
@@ -565,21 +644,35 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
 //    layout.minimumInteritemSpacing = 0;
 //    layout.minimumLineSpacing = cellMargin;
 //    layout.sectionInset = UIEdgeInsetsMake(0, 0, 0, cellMargin);
-    _collectionView = [[UICollectionView alloc] initWithFrame:CGRectMake(0, 0, self.view.width, self.view.height) collectionViewLayout:layout];
+    _collectionView = [[UICollectionView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width, self.view.frame.size.height) collectionViewLayout:layout];
 //    _collectionView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    _collectionView.backgroundColor = [UIColor blackColor];
+    _collectionView.backgroundColor = [UIColor clearColor];
     _collectionView.dataSource = self;
     _collectionView.delegate = self;
     _collectionView.pagingEnabled = YES;
     _collectionView.scrollsToTop = NO;
+//    _collectionView.alwaysBounceHorizontal = YES;
     _collectionView.showsHorizontalScrollIndicator = NO;
     _collectionView.contentOffset = CGPointMake(0, 0);
-    _collectionView.contentSize = CGSizeMake(_models.count * (_collectionView.width), 0);
-    [self.view addSubview:_collectionView];
+    _collectionView.contentSize = CGSizeMake(_models.count * (_collectionView.frame.size.width), 0);
+    
     [_collectionView registerClass:[LFPhotoPreviewCell class] forCellWithReuseIdentifier:@"LFPhotoPreviewCell"];
     [_collectionView registerClass:[LFPhotoPreviewGifCell class] forCellWithReuseIdentifier:@"LFPhotoPreviewGifCell"];
     [_collectionView registerClass:[LFPhotoPreviewLivePhotoCell class] forCellWithReuseIdentifier:@"LFPhotoPreviewLivePhotoCell"];
     [_collectionView registerClass:[LFPhotoPreviewVideoCell class] forCellWithReuseIdentifier:@"LFPhotoPreviewVideoCell"];
+    
+    [self.view addSubview:_collectionView];
+}
+
+- (void)configPullDown
+{
+    if (self.pullBackgroundView) {
+        /** 创建下拉手势 */
+        _panGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(panGesture:)];
+        _panGesture.delegate = self;
+        [self.view addGestureRecognizer:_panGesture];
+        [self.view insertSubview:self.pullBackgroundView belowSubview:self.backgroundView];
+    }
 }
 
 #pragma mark - Click Event
@@ -687,6 +780,7 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
         [imagePickerVc popViewControllerAnimated:YES];
         if (self.backButtonClickBlock) {
             self.backButtonClickBlock();
+            self.backButtonClickBlock = nil;
         }
     }
 }
@@ -738,6 +832,7 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
 
     if (self.doneButtonClickBlock) {
         self.doneButtonClickBlock();
+        self.doneButtonClickBlock = nil;
     }
 }
 
@@ -851,9 +946,9 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
     
     if (_isMTScroll) {        
         CGFloat offSetWidth = scrollView.contentOffset.x;
-        offSetWidth = offSetWidth +  (_collectionView.width/2);
+        offSetWidth = offSetWidth +  (_collectionView.frame.size.width/2);
         
-        NSInteger currentIndex = offSetWidth / (_collectionView.width);
+        NSInteger currentIndex = offSetWidth / (_collectionView.frame.size.width);
         
         if (currentIndex < _models.count && _currentIndex != currentIndex) {
             _currentIndex = currentIndex;
@@ -918,7 +1013,7 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
     if (@available(iOS 11.0, *)) {
         ios11Safeinsets = self.view.safeAreaInsets;
     }
-    return CGSizeMake(self.view.width-ios11Safeinsets.left-ios11Safeinsets.right, self.view.height);
+    return CGSizeMake(self.view.frame.size.width-ios11Safeinsets.left-ios11Safeinsets.right, self.view.frame.size.height);
 }
 
 - (UIEdgeInsets)collectionView:(UICollectionView *)collectionView layout:(UICollectionViewLayout*)collectionViewLayout insetForSectionAtIndex:(NSInteger)section
@@ -952,33 +1047,19 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
             return;
         } else if (!((LFPhotoPreviewVideoCell *)cell).isPlaying && !self.isHideMyNaviBar) {
             return;
+        } else if (self.panGesture.state != UIGestureRecognizerStatePossible) {
+            return;
         }
     }
-    LFImagePickerController *imagePickerVc = [self navi];
     // show or hide naviBar / 显示或隐藏导航栏
     self.isHideMyNaviBar = !self.isHideMyNaviBar;
     CGFloat alpha = self.isHideMyNaviBar ? 0.f : 1.f;
-    [UIView animateWithDuration:0.25f animations:^{
-        self->_naviBar.alpha = alpha;
-        self->_toolBar.alpha = alpha;
-        self->_naviTipsView.alpha = (self->_naviTipsLabel.text.length) ? alpha : 0.f;
-        CGFloat livePhotoSignViewY = (self->_naviTipsView.alpha == 0) ? CGRectGetMaxY(self->_naviBar.frame) : CGRectGetMaxY(self->_naviTipsView.frame);
-        self->_livePhotoSignView.y = livePhotoSignViewY + livePhotoSignMargin;
-        /** 非总是显示模式，并且 预览栏数量为0时，已经是被隐藏，不能显示, 取反操作 */
-        if (!(!self.alwaysShowPreviewBar && self->_previewBar.dataSource.count == 0)) {
-            self->_previewMainBar.alpha = alpha;
-        }
-        
-        /** live photo 标记 */
-        if (imagePickerVc.allowPickingType & LFPickingMediaTypeLivePhoto && cell.model.subType == LFAssetSubMediaTypeLivePhoto) {
-            self->_livePhotoSignView.alpha = alpha;
-        }
-    }];
+    [self changedAplhaWithItem:cell.model alpha:alpha];
 }
 
 #ifdef LF_MEDIAEDIT
 #pragma mark - LFPhotoEditingControllerDelegate
-- (void)lf_PhotoEditingController:(LFPhotoEditingController *)photoEditingVC didCancelPhotoEdit:(LFPhotoEdit *)photoEdit
+- (void)lf_PhotoEditingControllerDidCancel:(LFPhotoEditingController *)photoEditingVC
 {
 //    if (photoEdit == nil && _collectionView == nil) { /** 没有编辑 并且 UI未初始化 */
 //        self.tempEditImage = photoEditingVC.editImage;
@@ -1079,6 +1160,244 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
 }
 #endif
 
+#pragma mark - UIAdaptivePresentationControllerDelegate
+- (void)presentationControllerDidAttemptToDismiss:(UIPresentationController *)presentationController
+{
+    LFImagePickerController *imagePickerVc = [self navi];
+    if (imagePickerVc.topViewController != self) return;
+    
+    if (_doneButton.enabled) {
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:nil message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+        
+        [alert addAction:[UIAlertAction actionWithTitle:imagePickerVc.doneBtnTitleStr style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            [self doneButtonClick];
+        }]];
+        
+        [alert addAction:[UIAlertAction actionWithTitle:@"Discard Select" style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wundeclared-selector"
+            if ([imagePickerVc respondsToSelector:@selector(cancelButtonClick)]) {
+                [imagePickerVc performSelector:@selector(cancelButtonClick)];
+            }
+#pragma clang diagnostic pop
+        }]];
+        
+        [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleDefault handler:nil]];
+        
+        // The popover should point at the Cancel button
+        alert.popoverPresentationController.barButtonItem = self.navigationItem.leftBarButtonItem;
+        
+        [self presentViewController:alert animated:YES completion:nil];
+    } else {
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wundeclared-selector"
+        if ([imagePickerVc respondsToSelector:@selector(cancelButtonClick)]) {
+            [imagePickerVc performSelector:@selector(cancelButtonClick)];
+        }
+        #pragma clang diagnostic pop
+    }
+}
+
+#pragma mark - 下拉手势处理
+-(void)panGesture:(id)sender
+{
+    UIPanGestureRecognizer *panGesture = sender;
+
+    CGPoint movePoint = [panGesture translationInView:self.view];
+    
+    /** 优先判断：
+        1、下拉
+        2、操作在2次内完成
+     */
+    if (panGesture.state == UIGestureRecognizerStateChanged && !_isPulling) {
+        if (_pullTimes > 1) return;
+        CGFloat offsetY = movePoint.y - _beginPoint.y;
+        CGFloat offsetX = fabs(movePoint.x - _beginPoint.x);
+        if (!(offsetY > 5.0 && offsetY > offsetX)) {
+            ++_pullTimes;
+            return;
+        }
+    }
+    
+    switch (panGesture.state)
+    {
+        case UIGestureRecognizerStateBegan:{
+            
+            // 缩放不触发
+            LFPhotoPreviewCell *cell = (LFPhotoPreviewCell *)[_collectionView cellForItemAtIndexPath:[NSIndexPath indexPathForRow:_currentIndex inSection:0]];
+            if (cell.scrollView.zoomScale != 1.0) {
+                return;
+            }
+            _isPullBegan = YES;
+            _beginPoint = movePoint;
+        }
+            break;
+        case UIGestureRecognizerStateChanged:{
+            if (_isPullBegan) {
+                
+                if (!_isPulling) { // 首次触发时，创建临时视图来实现拖动
+                    LFPhotoPreviewCell *cell = (LFPhotoPreviewCell *)[_collectionView cellForItemAtIndexPath:[NSIndexPath indexPathForRow:_currentIndex inSection:0]];
+                    _pullSnapshotView = cell.imageContainerView;
+                    _pullSnapshotSuperView = cell.imageContainerView.superview;
+                    _pullSnapshotView.frame = [cell convertRect:cell.imageContainerView.frame toView:self.view];
+                    [self.view insertSubview:_pullSnapshotView aboveSubview:self.collectionView];
+                    self.collectionView.hidden = YES;
+                }
+                
+                CGFloat pullSnapshotViewInnerMidX = _pullSnapshotView.bounds.size.width / 2;
+                CGFloat pullSnapshotViewInnerMidY = _pullSnapshotView.bounds.size.height / 2;
+                static CGFloat ratioX = 0;
+                static CGFloat ratioY = 0;
+                if (!_isPulling) { // 首次触发时，计算落点在视图的比例
+                    CGPoint locationPoint = [panGesture locationInView:self.view];
+                    CGFloat innerX = locationPoint.x - _pullSnapshotView.frame.origin.x;
+                    CGFloat innerY = locationPoint.y - _pullSnapshotView.frame.origin.y;
+                    /** 计算开始拖动的点在视图的比例位置，视图位置分别是：以中心为标准值0，top，left为1，bottom，right为-1 */
+                    if (innerX > pullSnapshotViewInnerMidX) {
+                        ratioX = -1 * (innerX - pullSnapshotViewInnerMidX) / pullSnapshotViewInnerMidX;
+                    } else if (innerX < pullSnapshotViewInnerMidX) {
+                        ratioX = (pullSnapshotViewInnerMidX - innerX) / pullSnapshotViewInnerMidX;
+                    } else {
+                        ratioX = 0;
+                    }
+                    if (innerY > pullSnapshotViewInnerMidY) {
+                        ratioY = -1 * (innerY - pullSnapshotViewInnerMidY) / pullSnapshotViewInnerMidY;
+                    } else if (innerY < pullSnapshotViewInnerMidY) {
+                        ratioY = (pullSnapshotViewInnerMidY - innerY) / pullSnapshotViewInnerMidY;
+                    } else {
+                        ratioY = 0;
+                    }
+                }
+                
+                
+                _isPulling = YES;
+                
+                CGFloat distance = 1.0;
+                CGFloat minScale = 0.4;
+                if (_beginPoint.y < movePoint.y) {
+                    CGFloat length = self.view.frame.size.height * 0.65;
+                    distance = (length - (movePoint.y - _beginPoint.y)) / length;
+                    distance = MAX(distance, minScale);
+                }
+                
+                CGFloat moveX = (movePoint.x - _beginPoint.x);
+                CGFloat moveY = (movePoint.y - _beginPoint.y);
+                
+                
+                CGAffineTransform t = CGAffineTransformIdentity;
+                /** 跟随移动点移动 */
+                t = CGAffineTransformTranslate(t, moveX, moveY);
+                /** 缩放至原大小的distance倍 */
+                t = CGAffineTransformScale(t, distance, distance);
+                /** 缩放后移动点的位置会以中心为准，偏移到移动点的真实比例位置 */
+                t = CGAffineTransformTranslate(t, ratioX * -pullSnapshotViewInnerMidX * (1-distance) / distance, ratioY * -pullSnapshotViewInnerMidY * (1-distance) / distance);
+                _pullSnapshotView.transform = t;
+                /** 通过距离计算alpha的变化 将1~0.4区间换算为1～0区间值 */
+                CGFloat n = 100; // 分n等份
+                CGFloat per = (1-minScale)/n; // 每等份的距离
+                CGFloat m = (distance - minScale) / per; // 计算第几等份 (总数-最小区间)/每等份的距离
+                CGFloat alpha = 1/n*m; // 1～0每等份的距离*第几等份=总数
+                
+                self.backgroundView.alpha = alpha;
+                if (!self.isHideMyNaviBar) {
+                    [self changedAplhaWithItem:self.models[self.currentIndex] alpha:alpha];
+                }
+            }
+        }
+            break;
+        case UIGestureRecognizerStateEnded:
+        {
+            _originalPoint = _beginPoint = _endPoint = CGPointZero;
+            if (_isPullBegan && _isPulling) { /** 有触发滑动情况 */
+                panGesture.enabled = NO;
+                if (_pullSnapshotView.transform.d <= 0.4) { // 返回上一个界面
+                    CGRect targetRect = CGRectZero;
+                    if ([self.pulldelegate respondsToSelector:@selector(lf_PhotoPreviewControllerPullItemRect:)]) {
+                        targetRect = [self.pulldelegate lf_PhotoPreviewControllerPullItemRect:self.models[self.currentIndex]];
+                    }
+                    if (CGRectEqualToRect(CGRectZero, targetRect)) {
+                        [UIView animateWithDuration:0.25 animations:^{
+                            self->_pullSnapshotView.alpha = 0.0;
+                        } completion:^(BOOL finished) {
+                            LFImagePickerController *imagePickerVc = [self navi];
+                            [imagePickerVc popViewControllerAnimated:NO];
+                            if (self.backButtonClickBlock) {
+                                self.backButtonClickBlock();
+                                self.backButtonClickBlock = nil;
+                            }
+                        }];
+                    } else {
+                        // 移动到目标位置
+                        CGRect rect = _pullSnapshotView.frame;
+                        _pullSnapshotView.transform = CGAffineTransformIdentity;
+                        _pullSnapshotView.frame = rect;
+                        [UIView animateWithDuration:0.25 animations:^{
+//                            self->_pullSnapshotView.contentMode = UIViewContentModeScaleAspectFill;
+//                            self->_pullSnapshotView.clipsToBounds = YES;
+                            self->_pullSnapshotView.frame = targetRect;
+                        } completion:^(BOOL finished) {
+                            LFImagePickerController *imagePickerVc = [self navi];
+                            [imagePickerVc popViewControllerAnimated:NO];
+                            if (self.backButtonClickBlock) {
+                                self.backButtonClickBlock();
+                                self.backButtonClickBlock = nil;
+                            }
+                        }];
+                    }
+                } else { // 还原界面
+                    [UIView animateWithDuration:0.25 animations:^{
+                        self->_pullSnapshotView.transform = CGAffineTransformIdentity;
+                        self.backgroundView.alpha = 1.0;
+                        if (!self.isHideMyNaviBar) {
+                            [self changedAplhaWithItem:self.models[self.currentIndex] alpha:1.0];
+                        }
+                    } completion:^(BOOL finished) {
+                        self.collectionView.hidden = NO;
+                        [self.pullSnapshotSuperView addSubview:self->_pullSnapshotView];
+                        self->_pullSnapshotView = nil;
+                        self.pullSnapshotSuperView = nil;
+                        panGesture.enabled = YES;
+                    }];
+                }
+            }
+            _isPullBegan = NO;
+            _isPulling = NO;
+            _pullTimes = 0;
+        }
+            break;
+            
+        case UIGestureRecognizerStateCancelled:
+        case UIGestureRecognizerStateFailed:
+        {
+            _originalPoint = _beginPoint = _endPoint = CGPointZero;
+            if (_isPullBegan && _isPulling) { /** 有触发滑动情况 */
+                panGesture.enabled = NO;
+                [UIView animateWithDuration:0.25 animations:^{
+                    self->_pullSnapshotView.transform = CGAffineTransformIdentity;
+                    self.backgroundView.alpha = 1.0;
+                    if (!self.isHideMyNaviBar) {
+                        [self changedAplhaWithItem:self.models[self.currentIndex] alpha:1.0];
+                    }
+                } completion:^(BOOL finished) {
+                    self.collectionView.hidden = NO;
+                    [self.pullSnapshotSuperView addSubview:self->_pullSnapshotView];
+                    self->_pullSnapshotView = nil;
+                    self.pullSnapshotSuperView = nil;
+                    panGesture.enabled = YES;
+                }];
+            }
+            _isPullBegan = NO;
+            _isPulling = NO;
+            _pullTimes = 0;
+        }
+            break;
+        default:
+            break;
+            
+    }
+    _originalPoint = movePoint;
+}
+
 #pragma mark - Private Method
 
 - (void)refreshNaviBarAndBottomBarState {
@@ -1087,7 +1406,7 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
     _selectButton.selected = [imagePickerVc.selectedModels containsObject:model];
     if (_selectButton.selected) {
         NSString *text = [NSString stringWithFormat:@"%d", (int)[imagePickerVc.selectedModels indexOfObject:model]+1];
-        UIImage *image = [UIImage lf_mergeImage:bundleImageNamed(imagePickerVc.photoNumberIconImageName) text:text];
+        UIImage *image = [UIImage lf_mergeImage:bundleImageNamed(imagePickerVc.photoSelImageName) text:text];
         [_selectButton setImage:image forState:UIControlStateSelected];
     }
     _naviTipsLabel.text = nil;
@@ -1137,16 +1456,19 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
     [UIView animateWithDuration:0.25f animations:^{
         self->_naviTipsView.alpha = self.isHideMyNaviBar ? 0.f : (showTip ? 1.f : 0.f);
         CGFloat livePhotoSignViewY = (self->_naviTipsView.alpha == 0) ? CGRectGetMaxY(self->_naviBar.frame) : CGRectGetMaxY(self->_naviTipsView.frame);
-        self->_livePhotoSignView.y = livePhotoSignViewY + livePhotoSignMargin;
+        {
+            CGRect tempRect = self->_livePhotoSignView.frame;
+            tempRect.origin.y = livePhotoSignViewY + livePhotoSignMargin;
+            self->_livePhotoSignView.frame = tempRect;
+        }
     }];
     
-    
     if (self.alwaysShowPreviewBar) {
-        _doneButton.enabled = imagePickerVc.selectedModels.count;
+        _doneButton.enabled = imagePickerVc.selectedModels.count || imagePickerVc.autoSelectCurrentImage;
     } else if (_selectButton.hidden) {
-        _doneButton.enabled = imagePickerVc.selectedModels.count || !showTip;
+        _doneButton.enabled = imagePickerVc.selectedModels.count || imagePickerVc.autoSelectCurrentImage || !showTip;
     } else {
-        _doneButton.enabled = YES;
+        _doneButton.enabled = imagePickerVc.selectedModels.count || imagePickerVc.autoSelectCurrentImage;
     }
     _doneButton.backgroundColor = _doneButton.enabled ? imagePickerVc.oKButtonTitleColorNormal : imagePickerVc.oKButtonTitleColorDisabled;
     
@@ -1218,7 +1540,7 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
 
 - (void)checkSelectedPhotoBytes {
     __weak typeof(self) weakSelf = self;
-    LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
+    LFImagePickerController *imagePickerVc = [self navi];
     __weak typeof(imagePickerVc) weakImagePickerVc = imagePickerVc;
     
     NSMutableArray *newSelectedModes = [NSMutableArray arrayWithCapacity:5];
@@ -1263,6 +1585,31 @@ CGFloat const naviTipsViewDefaultHeight = 30.f;
     } else {
         _livePhotobadgeImageButton.backgroundColor = [UIColor whiteColor];
     }
+}
+
+- (void)changedAplhaWithItem:(LFAsset *)item alpha:(CGFloat)alpha
+{
+    LFImagePickerController *imagePickerVc = [self navi];
+    [UIView animateWithDuration:0.25f animations:^{
+        self->_naviBar.alpha = alpha;
+        self->_toolBar.alpha = alpha;
+        self->_naviTipsView.alpha = (self->_naviTipsLabel.text.length) ? alpha : 0.f;
+        CGFloat livePhotoSignViewY = (self->_naviTipsView.alpha == 0) ? CGRectGetMaxY(self->_naviBar.frame) : CGRectGetMaxY(self->_naviTipsView.frame);
+        {
+            CGRect tempRect = self->_livePhotoSignView.frame;
+            tempRect.origin.y = livePhotoSignViewY + livePhotoSignMargin;
+            self->_livePhotoSignView.frame = tempRect;
+        }
+        /** 非总是显示模式，并且 预览栏数量为0时，已经是被隐藏，不能显示, 取反操作 */
+        if (!(!self.alwaysShowPreviewBar && self->_previewBar.dataSource.count == 0)) {
+            self->_previewMainBar.alpha = alpha;
+        }
+        
+        /** live photo 标记 */
+        if (imagePickerVc.allowPickingType & LFPickingMediaTypeLivePhoto && item.subType == LFAssetSubMediaTypeLivePhoto) {
+            self->_livePhotoSignView.alpha = alpha;
+        }
+    }];
 }
 
 - (void)checkDefaultSelectedModels {

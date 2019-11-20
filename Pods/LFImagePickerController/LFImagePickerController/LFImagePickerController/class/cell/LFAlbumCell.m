@@ -8,7 +8,6 @@
 
 #import "LFAlbumCell.h"
 #import "LFImagePickerHeader.h"
-#import "UIView+LFFrame.h"
 #import "LFAlbum.h"
 #import "LFAssetManager+Simple.h"
 
@@ -106,8 +105,8 @@
     UIColor *color = [UIColor whiteColor];
     UIColor *placeholderColor = [UIColor colorWithWhite:0.5 alpha:1.0];
     
-    NSMutableAttributedString *nameString = [[NSMutableAttributedString alloc] initWithString:self.album.name attributes:@{NSFontAttributeName:[UIFont systemFontOfSize:20],NSForegroundColorAttributeName:color}];
-    NSAttributedString *countString = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"  (%zd)", self.album.count] attributes:@{NSFontAttributeName:[UIFont systemFontOfSize:20],NSForegroundColorAttributeName:placeholderColor}];
+    NSMutableAttributedString *nameString = [[NSMutableAttributedString alloc] initWithString:self.album.name attributes:@{NSFontAttributeName:[UIFont systemFontOfSize:17],NSForegroundColorAttributeName:color}];
+    NSAttributedString *countString = [[NSAttributedString alloc] initWithString:[NSString stringWithFormat:@"  (%zd)", self.album.count] attributes:@{NSFontAttributeName:[UIFont systemFontOfSize:17],NSForegroundColorAttributeName:placeholderColor}];
     [nameString appendAttributedString:countString];
     self.titleLabel.attributedText = nameString;
 }
@@ -124,11 +123,8 @@
 
 - (void)setSelectedImage:(UIImage *)image
 {
-    if (image) {
-        self.selectedImageView.image = image;
-    } else {
-        [_selectedImageView removeFromSuperview];
-    }
+    self.selectedImageView.image = image;
+    [_selectedImageView setHidden:image == nil];
 }
 
 - (void)prepareForReuse
@@ -142,14 +138,17 @@
     [super layoutSubviews];
     
     /** 居中 */
-    _posterImageView.centerY = self.contentView.height/2;
-    _titleLabel.frame = CGRectMake(80, 0, self.width - 80 - 50, self.height);
-    _selectedImageView.frame = CGRectMake(self.width-30-10, (self.height-30)/2, 30, 30);
+    _posterImageView.frame = CGRectMake(0, 0, self.contentView.frame.size.height, self.contentView.frame.size.height);
+    _posterImageView.center = CGPointMake(_posterImageView.center.x, self.contentView.frame.size.height/2);
+    _selectedImageView.frame = CGRectMake(self.contentView.frame.size.width - 30 - 10, (self.contentView.frame.size.height - 30)/2, 30, 30);
+    CGFloat left = _posterImageView.frame.size.width+10;
+    CGFloat right = self.contentView.frame.size.width - (_selectedImageView.frame.origin.x+10);
+    _titleLabel.frame = CGRectMake(left, 0, self.contentView.frame.size.width - (left + right), self.contentView.frame.size.height);
 }
 
 + (CGFloat)cellHeight
 {
-    return 70.f;
+    return 55.0;
 }
 
 #pragma mark - Lazy load
@@ -159,7 +158,7 @@
         UIImageView *posterImageView = [[UIImageView alloc] init];
         posterImageView.contentMode = UIViewContentModeScaleAspectFill;
         posterImageView.clipsToBounds = YES;
-        posterImageView.frame = CGRectMake(0, 0, 70, 70);
+        posterImageView.frame = CGRectMake(0, 0, self.contentView.frame.size.height, self.contentView.frame.size.height);
         [self.contentView addSubview:posterImageView];
         _posterImageView = posterImageView;
     }
@@ -170,7 +169,7 @@
     if (_titleLabel == nil) {
         UILabel *titleLabel = [[UILabel alloc] init];
         titleLabel.font = [UIFont boldSystemFontOfSize:17];
-        titleLabel.frame = CGRectMake(80, 0, self.width - 80 - 50, self.height);
+        titleLabel.frame = CGRectMake(self.contentView.frame.size.height, 0, self.contentView.frame.size.width - self.contentView.frame.size.height - 50, self.contentView.frame.size.height);
         titleLabel.textColor = [UIColor blackColor];
         titleLabel.textAlignment = NSTextAlignmentLeft;
         [self.contentView addSubview:titleLabel];
@@ -185,7 +184,7 @@
         UIImageView *selectedImageView = [[UIImageView alloc] init];
         selectedImageView.contentMode = UIViewContentModeScaleAspectFit;
         selectedImageView.clipsToBounds = YES;
-        selectedImageView.frame = CGRectMake(self.width-30-10, (self.height-30)/2, 30, 30);
+        selectedImageView.frame = CGRectMake(self.contentView.frame.size.width-30-10, (self.contentView.frame.size.height-30)/2, 30, 30);
         [self.contentView addSubview:selectedImageView];
         _selectedImageView = selectedImageView;
     }
