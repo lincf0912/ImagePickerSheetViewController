@@ -123,6 +123,9 @@
     if ([self.tableView respondsToSelector:@selector(setSeparatorInset:)]) {
         self.tableView.separatorInset = UIEdgeInsetsZero;
     }
+    if (@available(iOS 11.0, *)){
+        [self.tableView setContentInsetAdjustmentBehavior:UIScrollViewContentInsetAdjustmentNever];
+    }
     
     self.backgroundView = [[UIView alloc] initWithFrame:self.view.bounds];
     self.backgroundView.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.3961];
@@ -256,6 +259,10 @@
         _collectionView.alwaysBounceHorizontal = YES;
         [_collectionView registerClass:[ImageCollectionViewCell class] forCellWithReuseIdentifier:[ImageCollectionViewCell identifier]];
         [_collectionView registerClass:[PreviewSupplementaryView class] forSupplementaryViewOfKind:UICollectionElementKindSectionHeader withReuseIdentifier:[PreviewSupplementaryView identifier]];
+        
+        if (@available(iOS 11.0, *)){
+            [_collectionView setContentInsetAdjustmentBehavior:UIScrollViewContentInsetAdjustmentNever];
+        }
     }
     return _collectionView;
 }

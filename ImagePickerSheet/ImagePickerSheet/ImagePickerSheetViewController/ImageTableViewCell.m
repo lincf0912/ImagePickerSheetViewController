@@ -38,8 +38,11 @@
 - (void)layoutSubviews
 {
     [super layoutSubviews];
-    _collectionView.frame = CGRectMake(-CGRectGetWidth(self.contentView.bounds), CGRectGetMinY(self.contentView.bounds), CGRectGetWidth(self.contentView.bounds)*3, CGRectGetHeight(self.contentView.bounds));
-    _collectionView.contentInset = UIEdgeInsetsMake(0.0, CGRectGetWidth(self.contentView.bounds), 0.0, CGRectGetWidth(self.contentView.bounds));
+    CGRect collectionViewRect = CGRectMake(-CGRectGetWidth(self.contentView.bounds), CGRectGetMinY(self.contentView.bounds), CGRectGetWidth(self.contentView.bounds)*3, CGRectGetHeight(self.contentView.bounds));
+    if (!CGRectEqualToRect(collectionViewRect, _collectionView.frame)) {
+        _collectionView.frame = collectionViewRect;
+        _collectionView.contentInset = UIEdgeInsetsMake(0.0, CGRectGetWidth(self.contentView.bounds), 0.0, CGRectGetWidth(self.contentView.bounds));        
+    }
 }
 
 @end
