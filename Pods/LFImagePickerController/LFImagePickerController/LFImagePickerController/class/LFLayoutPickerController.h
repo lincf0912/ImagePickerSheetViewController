@@ -21,6 +21,8 @@
 @property (nonatomic, copy) NSString *photoDefImageName;
 @property (nonatomic, copy) NSString *photoOriginSelImageName;
 @property (nonatomic, copy) NSString *photoOriginDefImageName;
+@property (nonatomic, copy) NSString *videoPlayImageName;
+@property (nonatomic, copy) NSString *videoPauseImageName;
 @property (nonatomic, copy) NSString *ablumSelImageName;
 
 /// Custom appearance color
@@ -34,6 +36,11 @@
 @property (nonatomic, strong) UIFont *naviTipsFont;
 @property (nonatomic, strong) UIColor *barItemTextColor;
 @property (nonatomic, strong) UIFont *barItemTextFont;
+@property (nonatomic, strong) UIColor *contentBgColor;
+@property (nonatomic, strong) UIColor *contentTipsTextColor;
+@property (nonatomic, strong) UIFont *contentTipsFont;
+@property (nonatomic, strong) UIColor *contentTipsTitleColorNormal;
+@property (nonatomic, strong) UIFont *contentTipsTitleFont;
 @property (nonatomic, strong) UIColor *toolbarBgColor;
 @property (nonatomic, strong) UIColor *toolbarTitleColorNormal;
 @property (nonatomic, strong) UIColor *toolbarTitleColorDisabled;

@@ -1,1 +1,0 @@
-../../../LFImagePickerController/LFImagePickerController/LFImagePickerController/vendors/LFGifPlayer/LFWeakProxy.h

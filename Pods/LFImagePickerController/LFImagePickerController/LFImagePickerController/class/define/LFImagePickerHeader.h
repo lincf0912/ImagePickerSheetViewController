@@ -13,6 +13,8 @@
 #define isiPhone (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone)
 #define isiPad (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad)
 
+#define IOS_VERSION [[[UIDevice currentDevice] systemVersion] floatValue]
+
 
 #define dispatch_main_async_safe(block)\
 if ([NSThread isMainThread]) {\
@@ -42,4 +44,7 @@ extern float const kThumbnailCompressSize;
 extern float const kMaxPhotoBytes;
 /** 视频最大时长 */
 extern float const kMaxVideoDurationze;
+
+/** UIControlStateHighlighted 高亮透明度 */
+extern float const kControlStateHighlightedAlpha;
 

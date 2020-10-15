@@ -19,4 +19,9 @@
 
 @property (nonatomic, readwrite) UIImage *previewImage;
 
+@property (nonatomic, assign) BOOL isFinalData;
+
+/** 重置视图 */
+- (void)resizeSubviews;
+
 @end

@@ -21,6 +21,10 @@
     
     UIStatusBarStyle _originStatusBarStyle;
 }
+
+@property (nonatomic, strong) NSMutableArray <UIAlertController *>*delayAlertControllers;
+@property (nonatomic, strong) NSTimer *delayTimer;
+
 @end
 
 @implementation LFLayoutPickerController
@@ -45,6 +49,7 @@
 
 - (void)customInit
 {
+    _delayAlertControllers = [NSMutableArray arrayWithCapacity:1];
     [self configDefaultSetting];
 }
 
@@ -148,6 +153,11 @@
     self.naviTipsFont = [UIFont boldSystemFontOfSize:14];
     self.barItemTextFont = [UIFont systemFontOfSize:17];
     self.barItemTextColor = [UIColor whiteColor];
+    self.contentBgColor = [UIColor colorWithRed:47.0/255.0 green:47.0/255.0 blue:47.0/255.0 alpha:1.0];
+    self.contentTipsTextColor = [UIColor lightGrayColor];
+    self.contentTipsFont = [UIFont systemFontOfSize:18];
+    self.contentTipsTitleColorNormal = [UIColor systemBlueColor];
+    self.contentTipsTitleFont = [UIFont systemFontOfSize:18];
     self.toolbarBgColor = [UIColor colorWithRed:(68/255.0) green:(68/255.0)  blue:(68/255.0) alpha:0.9];
     self.toolbarTitleColorNormal = [UIColor whiteColor];
     self.toolbarTitleColorDisabled = [UIColor colorWithRed:(112/255.0) green:(112/255.0) blue:(112/255.0) alpha:1.0];
@@ -164,6 +174,8 @@
     self.photoDefImageName = @"photo_album_def";
     self.photoOriginDefImageName = @"photo_original_def";
     self.photoOriginSelImageName = @"photo_original_sel";
+    self.videoPlayImageName = @"video_play";
+    self.videoPauseImageName = @"video_pause";
     self.ablumSelImageName = @"ablum_sel";
 }
 
@@ -243,18 +255,44 @@
 {
     if (@available(iOS 8.0, *)){
         UIAlertController *alertController = [UIAlertController alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleAlert];
+        __weak typeof(self) weakSelf = self;
         [alertController addAction:[UIAlertAction actionWithTitle:cancelTitle style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
             if (complete) {
                 complete();
             }
+            [weakSelf presentDelayViewController];
         }]];
-        [self presentViewController:alertController animated:YES completion:nil];
+        if (self.presentedViewController) {
+            [self.delayAlertControllers addObject:alertController];
+            if (self.delayTimer == nil) {
+                self.delayTimer = [NSTimer scheduledTimerWithTimeInterval:0.2 target:self selector:@selector(observeTopViewControllerChange) userInfo:nil repeats:YES];
+            }
+        } else {
+            [self presentViewController:alertController animated:YES completion:nil];
+        }
     } else {
         [[[UIAlertView alloc] lf_initWithTitle:title message:message cancelButtonTitle:cancelTitle otherButtonTitles:nil block:^(UIAlertView *alertView, NSInteger buttonIndex) {
             if (complete) {
                 complete();
             }
         }] show];
+    }
+}
+
+- (void)observeTopViewControllerChange {
+    if (self.presentedViewController == nil) {
+        [self.delayTimer invalidate];
+        self.delayTimer = nil;
+        [self presentDelayViewController];
+    }
+}
+
+- (void)presentDelayViewController
+{
+    UIAlertController *alertController = self.delayAlertControllers.firstObject;
+    if (alertController) {
+        [self.delayAlertControllers removeObject:alertController];
+        [self presentViewController:alertController animated:YES completion:nil];
     }
 }
 

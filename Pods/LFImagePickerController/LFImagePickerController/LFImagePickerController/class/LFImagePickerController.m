@@ -14,6 +14,7 @@
 #import "LFPhotoEditManager.h"
 #import "LFVideoEditManager.h"
 #import "UIView+LFAnimate.h"
+#import "NSString+LFExtendedStringDrawing.h"
 
 #import "LFPhotoPickerController.h"
 #import "LFPhotoPickerController+preview.h"
@@ -26,7 +27,7 @@
 
 @interface LFImagePickerController ()
 {
-    NSTimer *_timer;
+    NSTimer *_timer NS_DEPRECATED_IOS(2_0, 8_0);
     BOOL _didPushPhotoPickerVc;
 }
 
@@ -49,42 +50,66 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    self.view.backgroundColor = [UIColor whiteColor];
+    NSAssert(self.allowPickingType != LFPickingMediaTypeNone, @"allowPickingType cann‘t be set to LFPickingMediaTypeNone.");
+    
+    self.view.backgroundColor = self.contentBgColor;
     // simple
     [LFAssetManager manager].sortAscendingByCreateDate = self.sortAscendingByCreateDate;
     [LFAssetManager manager].allowPickingType = self.allowPickingType;
+    [LFAssetManager manager].autoPlayLivePhoto = self.autoPlayLivePhoto;
     
-    if (![[LFAssetManager manager] authorizationStatusAuthorized]) {
+    LFPhotoAuthorizationStatus status = [[LFAssetManager manager] lf_authorizationStatusAndRequestAuthorization:^(LFPhotoAuthorizationStatus status) {
+        
+        BOOL isAuthorized = (status == LFPhotoAuthorizationStatusLimited || status == LFPhotoAuthorizationStatusAuthorized);
+        
+        if (isAuthorized) {
+            [self.tipView removeFromSuperview];
+            [self pushPhotoPickerVc];
+        }
+    }];
+    
+    BOOL isAuthorized = (status == LFPhotoAuthorizationStatusLimited || status == LFPhotoAuthorizationStatusAuthorized);
+    if (!isAuthorized) {
         
         UIView *tipView = [[UIView alloc] initWithFrame:self.view.bounds];
         
-        UILabel *_tipLabel = [[UILabel alloc] init];
-        _tipLabel.frame = CGRectMake(8, 120, self.view.frame.size.width - 16, 60);
-        _tipLabel.textAlignment = NSTextAlignmentCenter;
-        _tipLabel.numberOfLines = 0;
-        _tipLabel.font = [UIFont systemFontOfSize:16];
-        _tipLabel.textColor = [UIColor blackColor];
         NSString *appName = [[NSBundle mainBundle].infoDictionary valueForKey:@"CFBundleDisplayName"];
         if (!appName) appName = [[NSBundle mainBundle].infoDictionary valueForKey:@"CFBundleName"];
+        
         NSString *tipText = [NSString stringWithFormat:[NSBundle lf_localizedStringForKey:@"_photoLibraryAuthorityTipText"],appName];
+        CGFloat textWidth = self.view.frame.size.width - 16;
+        CGSize textSize = [tipText lf_boundingSizeWithSize:CGSizeMake(textWidth, CGFLOAT_MAX) font:self.contentTipsFont];
+        
+        UILabel *_tipLabel = [[UILabel alloc] init];
+        _tipLabel.frame = CGRectMake(8, 120, textWidth, textSize.height);
+        _tipLabel.textAlignment = NSTextAlignmentCenter;
+        _tipLabel.numberOfLines = 0;
+        _tipLabel.font = self.contentTipsFont;
+        _tipLabel.textColor = self.contentTipsTextColor;
         _tipLabel.text = tipText;
         [tipView addSubview:_tipLabel];
         
-        UIButton *_settingBtn = [UIButton buttonWithType:UIButtonTypeSystem];
+        CGSize titleSize = [self.settingBtnTitleStr lf_boundingSizeWithSize:CGSizeMake(self.view.frame.size.width, CGFLOAT_MAX) font:self.contentTipsTitleFont];
+        
+        UIButton *_settingBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+        _settingBtn.frame = CGRectMake((CGRectGetWidth(self.view.frame)-titleSize.width)/2, CGRectGetMaxY(_tipLabel.frame)+10, titleSize.width, titleSize.height);
         [_settingBtn setTitle:self.settingBtnTitleStr forState:UIControlStateNormal];
-        _settingBtn.frame = CGRectMake(0, 180, self.view.frame.size.width, 44);
-        _settingBtn.titleLabel.font = [UIFont systemFontOfSize:18];
+        [_settingBtn setTitleColor:self.contentTipsTitleColorNormal forState:UIControlStateNormal];
+        [_settingBtn setTitleColor:[self.contentTipsTitleColorNormal colorWithAlphaComponent:kControlStateHighlightedAlpha] forState:UIControlStateHighlighted];
+        _settingBtn.titleLabel.font = self.contentTipsTitleFont;
         [_settingBtn addTarget:self action:@selector(settingBtnClick) forControlEvents:UIControlEventTouchUpInside];
         [tipView addSubview:_settingBtn];
         
         CGFloat naviBarHeight = CGRectGetHeight(self.navigationBar.frame);
         
-        CGFloat cancelWidth = [self.cancelBtnTitleStr boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX) options:NSStringDrawingUsesFontLeading attributes:@{NSFontAttributeName:self.barItemTextFont} context:nil].size.width + 2 + 32;
+        CGFloat cancelWidth = [self.cancelBtnTitleStr lf_boundingSizeWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX) font:self.barItemTextFont].width + 2 + 32;
         
-        UIButton *_cancelBtn = [[UIButton alloc] initWithFrame:CGRectMake(self.view.frame.size.width-cancelWidth, 0, cancelWidth, naviBarHeight)];
+        UIButton *_cancelBtn = [UIButton buttonWithType:UIButtonTypeCustom];
+        _cancelBtn.frame = CGRectMake(self.view.frame.size.width-cancelWidth, 0, cancelWidth, naviBarHeight);
         [_cancelBtn setTitle:self.cancelBtnTitleStr forState:UIControlStateNormal];
+        [_cancelBtn setTitleColor:self.barItemTextColor forState:UIControlStateNormal];
+        [_cancelBtn setTitleColor:[self.barItemTextColor colorWithAlphaComponent:kControlStateHighlightedAlpha] forState:UIControlStateHighlighted];
         _cancelBtn.titleLabel.font = self.barItemTextFont;
-        _cancelBtn.titleLabel.textColor = self.barItemTextColor;
         [_cancelBtn addTarget:self action:@selector(cancelButtonClick) forControlEvents:UIControlEventTouchUpInside];
         [tipView addSubview:_cancelBtn];
         _tip_cancelBtn = _cancelBtn;
@@ -92,8 +117,9 @@
         [self.view addSubview:tipView];
         _tipView = tipView;
         
-        _timer = [NSTimer scheduledTimerWithTimeInterval:0.2 target:self selector:@selector(observeAuthrizationStatusChange) userInfo:nil repeats:YES];
-        
+        if (IOS_VERSION < 8.0) {
+            _timer = [NSTimer scheduledTimerWithTimeInterval:0.2 target:self selector:@selector(observeAuthrizationStatusChange) userInfo:nil repeats:YES];
+        }
     } else {
         [self pushPhotoPickerVc];
     }
@@ -178,6 +204,7 @@
 }
 - (instancetype)initWithSelectedAssets:(NSArray /**<PHAsset/ALAsset *>*/*)selectedAssets index:(NSUInteger)index
 {
+    NSAssert(selectedAssets.count > index, @"index 0 beyond bounds for selectedAssets count.");
     self = [super init];
     if (self) {
         [self defaultConfig];
@@ -187,6 +214,9 @@
         NSMutableArray *models = [NSMutableArray array];
         for (id asset in selectedAssets) {
             LFAsset *model = [[LFAsset alloc] initWithAsset:asset];
+            if (model.subType == LFAssetSubMediaTypeLivePhoto) {
+                model.closeLivePhoto = !self.autoPlayLivePhoto;
+            }
             [models addObject:model];
         }
         _previewVc = [[LFPhotoPreviewController alloc] initWithPhotos:models index:index];
@@ -196,6 +226,7 @@
 
 - (instancetype)initWithSelectedPhotos:(NSArray <UIImage *>*)selectedPhotos index:(NSUInteger)index complete:(void (^)(NSArray <UIImage *>* photos))complete __deprecated_msg("Method deprecated. Use `initWithSelectedImageObjects:index:complete:`")
 {
+    NSAssert(selectedPhotos.count > index, @"index 0 beyond bounds for selectedPhotos count.");
     self = [super init];
     if (self) {
         [self defaultConfig];
@@ -244,6 +275,7 @@
 
 - (instancetype)initWithSelectedImageObjects:(NSArray <id<LFAssetImageProtocol>>*)selectedPhotos index:(NSUInteger)index complete:(void (^)(NSArray <id<LFAssetImageProtocol>>* photos))complete
 {
+    NSAssert(selectedPhotos.count > index, @"index 0 beyond bounds for selectedPhotos count.");
     self = [super init];
     if (self) {
         [self defaultConfig];
@@ -400,12 +432,14 @@
     self.imageCompressSize = kCompressSize;
     self.thumbnailCompressSize = kThumbnailCompressSize;
     self.maxPhotoBytes = kMaxPhotoBytes;
-    self.videoCompressPresetName = AVAssetExportPresetMediumQuality;
+    self.videoCompressPresetName = AVAssetExportPreset1280x720;
     self.maxVideoDuration = kMaxVideoDurationze;
     self.autoSavePhotoAlbum = YES;
     self.displayImageFilename = NO;
-    self.syncAlbum = NO;
+    self.syncAlbum = YES;
+    self.autoPlayLivePhoto = YES;
 }
+
 
 - (void)observeAuthrizationStatusChange {
     if ([[LFAssetManager manager] authorizationStatusAuthorized]) {
@@ -479,13 +513,17 @@
 }
 
 - (void)settingBtnClick {
-    if (@available(iOS 8.0, *)){
+    NSURL *url = [NSURL URLWithString:UIApplicationOpenSettingsURLString];
+    
+    if ([[UIApplication sharedApplication] canOpenURL:url]) {
         if (@available(iOS 10.0, *)){
-            [[UIApplication sharedApplication] openURL:[NSURL URLWithString:UIApplicationOpenSettingsURLString] options:@{} completionHandler:nil];
+            [[UIApplication sharedApplication] openURL:[NSURL URLWithString:UIApplicationOpenSettingsURLString] options:@{} completionHandler:^(BOOL success) {
+                
+            }];
         } else {
             [[UIApplication sharedApplication] openURL:[NSURL URLWithString:UIApplicationOpenSettingsURLString]];
         }
-        [self cancelButtonClick];
+        [self cancelButtonClickAnimated:NO];
     } else {
         NSString *message = [NSBundle lf_localizedStringForKey:@"_PrivacyAuthorityJumpTipText"];
         __weak typeof(self) weakSelf = self;
@@ -511,16 +549,20 @@
     [super setViewControllers:viewControllers animated:animated];
 }
 
-#pragma mark - Public
-
-- (void)cancelButtonClick {
+- (void)cancelButtonClickAnimated:(BOOL)animated {
     if (self.autoDismiss) {
-        [self dismissViewControllerAnimated:YES completion:^{
+        [self dismissViewControllerAnimated:animated completion:^{
             [self callDelegateMethod];
         }];
     } else {
         [self callDelegateMethod];
     }
+}
+
+#pragma mark - Public
+
+- (void)cancelButtonClick {
+    [self cancelButtonClickAnimated:YES];
 }
 
 - (void)callDelegateMethod {

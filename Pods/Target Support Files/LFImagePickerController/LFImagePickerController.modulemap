@@ -1,0 +1,6 @@
+framework module LFImagePickerController {
+  umbrella header "LFImagePickerController-umbrella.h"
+
+  export *
+  module * { export * }
+}

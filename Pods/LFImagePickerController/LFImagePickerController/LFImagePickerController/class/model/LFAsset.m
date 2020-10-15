@@ -25,26 +25,23 @@
 - (NSTimeInterval)lf_getRealDuration
 {
     __block double dur = 0;
-    /** 为了更加快速的获取相册数据，非慢动作视频不使用requestPlayerItemForVideo获取时长。 */
+    /** 为了更加快速的获取相册数据，非慢动作视频不使用requestAVAssetForVideo获取时长。直接获取duration属性即可 */
     if (self.mediaSubtypes == PHAssetMediaSubtypeVideoHighFrameRate) {
         /** 慢动作视频获取真实时长 */
         dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
         PHVideoRequestOptions *options = [[PHVideoRequestOptions alloc] init];
         options.version =  PHVideoRequestOptionsVersionCurrent;
-//        options.deliveryMode = PHImageRequestOptionsDeliveryModeFastFormat;
-        /** requestPlayerItemForVideo api可以获取playerItem，里面的duration可以转换为真实时长，此方法并不耗时。 */
-        //        NSTimeInterval s = [[NSDate date] timeIntervalSince1970];
-        [[PHImageManager defaultManager] requestPlayerItemForVideo:self options:options resultHandler:^(AVPlayerItem * _Nullable playerItem, NSDictionary * _Nullable info) {
-            /** 效率偏低，所有视频的值都是可靠的。 */
-            //        dur = CMTimeGetSeconds(playerItem.asset.duration);
-            /** 效率高，非慢动作视频的值是Nan，具体原因看duration的API描述。 */
-            dur = CMTimeGetSeconds(playerItem.duration);
-            //        NSLog(@"%f -- %f -- %f", dur, CMTimeGetSeconds(playerItem.asset.duration), self.duration);
-            //慢拍视频 playerItem.asset 是一个AVComposition的类
+        //        options.deliveryMode = PHImageRequestOptionsDeliveryModeFastFormat;
+        /** requestAVAssetForVideo api可以获取AVAsset，里面的duration可以转换为真实时长，此方法并不太耗时。 */
+//        NSTimeInterval s = [[NSDate date] timeIntervalSince1970];
+        
+        [[PHImageManager defaultManager] requestAVAssetForVideo:self options:options resultHandler:^(AVAsset * _Nullable asset, AVAudioMix * _Nullable audioMix, NSDictionary * _Nullable info) {
+            AVURLAsset *urlAsset = (AVURLAsset *)asset;
+            dur = CMTimeGetSeconds(urlAsset.duration);
             dispatch_semaphore_signal(semaphore);
         }];
         dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
-        //        NSLog(@"time : %f", [[NSDate date] timeIntervalSince1970] - s);
+//        NSLog(@"time : %f", [[NSDate date] timeIntervalSince1970] - s);
     }
     if (!isnan(dur) && dur>0) {
         return dur;
@@ -88,35 +85,17 @@
                     _subType = LFAssetSubMediaTypeLivePhoto;
                 } else
 #endif
-                /** 判断gif图片，由于公开方法效率太低，改用私有API判断 */
-                    if ([[phAsset valueForKey:@"uniformTypeIdentifier"] isEqualToString:(__bridge NSString *)kUTTypeGIF]) {
-                        _subType = LFAssetSubMediaTypeGIF;
-                    }
-                //                if (@available(iOS 9.0, *)){
-                //                    /** 新判断GIF图片方法 */
-                //                    NSArray <PHAssetResource *>*resourceList = [PHAssetResource assetResourcesForAsset:asset];
-                //                    [resourceList enumerateObjectsUsingBlock:^(id  _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
-                //                        PHAssetResource *resource = obj;
-                //                        if ([resource.uniformTypeIdentifier isEqualToString:(__bridge NSString *)kUTTypeGIF]) {
-                //                            self->_subType = LFAssetSubMediaTypeGIF;
-                //                            *stop = YES;
-                //                        }
-                //                    }];
-                //                } else {
-                //
-                //                    PHImageRequestOptions *option = [[PHImageRequestOptions alloc] init];
-                //                    option.resizeMode = PHImageRequestOptionsResizeModeFast;
-                //                    option.deliveryMode = PHImageRequestOptionsDeliveryModeFastFormat;
-                //                    option.synchronous = YES;
-                //                    [[PHImageManager defaultManager] requestImageDataForAsset:asset
-                //                                                                      options:option
-                //                                                                resultHandler:^(NSData * _Nullable imageData, NSString * _Nullable dataUTI, UIImageOrientation orientation, NSDictionary * _Nullable info) {
-                //                                                                    //gif 图片
-                //                                                                    if ([dataUTI isEqualToString:(__bridge NSString *)kUTTypeGIF]) {
-                //                                                                        self->_subType = LFAssetSubMediaTypeGIF
-                //                                                                    }
-                //                                                                }];
-                //                }
+                if (phAsset.mediaSubtypes & PHAssetMediaSubtypePhotoPanorama) {
+                    _subType = LFAssetSubMediaTypePhotoPanorama;
+                } else
+            /** 判断gif图片，由于公开方法效率太低，改用私有API判断 */
+                if ([[phAsset valueForKey:@"uniformTypeIdentifier"] isEqualToString:(__bridge NSString *)kUTTypeGIF]) {
+                    _subType = LFAssetSubMediaTypeGIF;
+                } else if (lf_isHor(CGSizeMake(phAsset.pixelWidth, phAsset.pixelHeight))){
+                    _subType = LFAssetSubMediaTypePhotoPanorama;
+                } else if (lf_isPiiic(CGSizeMake(phAsset.pixelWidth, phAsset.pixelHeight))){
+                    _subType = LFAssetSubMediaTypePhotoPiiic;
+                }
             }
         } else if ([asset isKindOfClass:[ALAsset class]]) {
             ALAsset *alAsset = (ALAsset *)asset;

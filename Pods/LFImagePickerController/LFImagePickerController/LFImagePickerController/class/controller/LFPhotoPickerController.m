@@ -17,11 +17,13 @@
 #import "UIImage+LF_Format.h"
 
 #import "LFAlbum.h"
+#import "LFAlbum+SmartAlbum.h"
 #import "LFAsset.h"
 #import "LFAssetCell.h"
 #import "LFAssetManager+Authorization.h"
 #import "LFAssetManager+SaveAlbum.h"
 #import "LFAssetManager+Simple.h"
+#import "NSString+LFExtendedStringDrawing.h"
 
 #import "LFAlbumTitleView.h"
 
@@ -56,7 +58,7 @@ CGFloat const bottomToolBarHeight = 50.f;
 
 @end
 
-@interface LFPhotoPickerController ()<UICollectionViewDataSource,UICollectionViewDelegate,UIImagePickerControllerDelegate,UINavigationControllerDelegate, LFPhotoPreviewControllerPullDelegate>
+@interface LFPhotoPickerController ()<UICollectionViewDataSource,UICollectionViewDelegate,UIImagePickerControllerDelegate,UINavigationControllerDelegate, LFPhotoPreviewControllerPullDelegate, UIViewControllerPreviewingDelegate, PHPhotoLibraryChangeObserver, UIAdaptivePresentationControllerDelegate>
 {
     
     UIView *_bottomSubToolBar;
@@ -67,7 +69,6 @@ CGFloat const bottomToolBarHeight = 50.f;
     UIButton *_originalPhotoButton;
     UILabel *_originalPhotoLabel;
     
-    BOOL _showTakePhotoBtn;
 }
 @property (nonatomic, weak) UIView *nonePhotoView;
 @property (nonatomic, weak) LFCollectionView *collectionView;
@@ -90,10 +91,6 @@ CGFloat const bottomToolBarHeight = 50.f;
 
 @end
 
-@interface LFPhotoPickerController () <UIViewControllerPreviewingDelegate, PHPhotoLibraryChangeObserver, UIAdaptivePresentationControllerDelegate>
-
-@end
-
 @implementation LFPhotoPickerController
 
 /** 图片预览模式 */
@@ -112,7 +109,7 @@ CGFloat const bottomToolBarHeight = 50.f;
     [super viewDidLoad];
     // Do any additional setup after loading the view.
     LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
-    self.view.backgroundColor = [UIColor colorWithRed:47.0/255.0 green:47.0/255.0 blue:47.0/255.0 alpha:1.0];
+    self.view.backgroundColor = imagePickerVc.contentBgColor;
     
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wundeclared-selector"
@@ -275,12 +272,14 @@ CGFloat const bottomToolBarHeight = 50.f;
     
     if (self.model) {
         /** 创建titleView */
-        LFAlbumTitleView *titleView = [[LFAlbumTitleView alloc] init];
+        NSInteger index = [self.albumArr indexOfObject:self.model];
+        LFAlbumTitleView *titleView = [[LFAlbumTitleView alloc] initWithContentViewController:self index:index];
         titleView.albumArr = self.albumArr;
         titleView.selectImageName = imagePickerVc.ablumSelImageName;
         titleView.title = imagePickerVc.defaultAlbumName;
         
         __weak typeof(self) weakSelf = self;
+        __weak typeof(imagePickerVc) weakImagePickerVc = imagePickerVc;
         titleView.didSelected = ^(LFAlbum * _Nonnull album, NSInteger index) {
             if (![weakSelf.model isEqual:album]) {
                 weakSelf.model = album;
@@ -288,6 +287,12 @@ CGFloat const bottomToolBarHeight = 50.f;
                     weakSelf.animtionDelayTime = 0.015;
                     [weakSelf.collectionView reloadData];
                     [weakSelf scrollCollectionViewToBottom];
+                    if (weakSelf.models.count == 0 && !weakImagePickerVc.allowTakePicture) {
+                        // 添加没有图片的提示
+                        [weakSelf configNonePhotoView];
+                    } else {
+                        [weakSelf removeNonePhotoView];
+                    }
                 }];
             }
         };
@@ -296,29 +301,35 @@ CGFloat const bottomToolBarHeight = 50.f;
     }
     
     [imagePickerVc hideProgressHUD];
-
-    _showTakePhotoBtn = imagePickerVc.allowTakePicture;
     
-    if (_models.count == 0 && !_showTakePhotoBtn) {
+    
+    [self configCollectionView];
+    [self configBottomToolBar];
+    [self scrollCollectionViewToBottom];
+    
+    if (_models.count == 0 && !imagePickerVc.allowTakePicture) {
+        // 添加没有图片的提示
         [self configNonePhotoView];
     } else {
-        [self configCollectionView];
-        [self configBottomToolBar];
-        [self scrollCollectionViewToBottom];
-        
-        // 监听屏幕旋转
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(orientationDidChange:) name:UIDeviceOrientationDidChangeNotification object:nil];
+        [self removeNonePhotoView];
     }
     
+    // 监听屏幕旋转
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(orientationDidChange:) name:UIDeviceOrientationDidChangeNotification object:nil];
 }
 
 - (void)configNonePhotoView {
     
     if (_nonePhotoView) {
-        [_nonePhotoView removeFromSuperview];
+        return;
     }
+    
     LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
-    UIView *nonePhotoView = [[UIView alloc] initWithFrame:[self viewFrameWithoutNavigation]];
+    CGRect frame = [self viewFrameWithoutNavigation];
+    frame.size.height -= _bottomToolBar.frame.size.height;
+    
+    UIView *nonePhotoView = [[UIView alloc] initWithFrame:frame];
+    nonePhotoView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     nonePhotoView.backgroundColor = [UIColor clearColor];
     
     NSString *text = [NSBundle lf_localizedStringForKey:@"_LFPhotoPickerController_noMediaTipText"];
@@ -327,27 +338,54 @@ CGFloat const bottomToolBarHeight = 50.f;
     } else if (imagePickerVc.allowPickingType > 0 && !(imagePickerVc.allowPickingType & LFPickingMediaTypeVideo)) { // only photo
         text = [NSBundle lf_localizedStringForKey:@"_LFPhotoPickerController_noPhotoTipText"];
     }
-    UIFont *font = [UIFont systemFontOfSize:18];
     
-    UILabel *label = [[UILabel alloc] initWithFrame:nonePhotoView.bounds];
+    CGFloat textWidth = nonePhotoView.bounds.size.width - 20*2;
+    CGSize textSize = [text lf_boundingSizeWithSize:CGSizeMake(textWidth, CGFLOAT_MAX) font:imagePickerVc.contentTipsFont];
+    textSize.height += 10;
+    
+    
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake((CGRectGetWidth(nonePhotoView.frame)-textWidth)/2, (CGRectGetHeight(nonePhotoView.frame)-textSize.height)/2, textWidth, textSize.height)];
     label.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     label.textAlignment = NSTextAlignmentCenter;
-    label.font = font;
+    label.numberOfLines = 0;
+    label.font = imagePickerVc.contentTipsFont;
     label.text = text;
-    label.textColor = [UIColor lightGrayColor];
+    label.textColor = imagePickerVc.contentTipsTextColor;
     
     [nonePhotoView addSubview:label];
-    nonePhotoView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    [self.view addSubview:nonePhotoView];
+    
+    LFPhotoAuthorizationStatus status = [[LFAssetManager manager] lf_authorizationStatus];
+    if (status == LFPhotoAuthorizationStatusLimited) {
+        NSString *title = [NSBundle lf_localizedStringForKey:@"_LFPhotoPickerController_buttonTipTitle"];
+        CGSize textSize = [title lf_boundingSizeWithSize:CGSizeMake(textWidth, CGFLOAT_MAX) font:imagePickerVc.contentTipsTitleFont];
+        UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+        button.frame = CGRectMake(0, 0, textSize.width, textSize.height);
+        button.center = CGPointMake(label.center.x, label.center.y + label.bounds.size.height + 5);
+        button.titleLabel.font = imagePickerVc.contentTipsTitleFont;
+        [button setTitle:title forState:UIControlStateNormal];
+        [button setTitleColor:imagePickerVc.contentTipsTitleColorNormal forState:UIControlStateNormal];
+        [button setTitleColor:[imagePickerVc.contentTipsTitleColorNormal colorWithAlphaComponent:kControlStateHighlightedAlpha] forState:UIControlStateHighlighted];
+        [button addTarget:self action:@selector(changedPhotoLimited) forControlEvents:UIControlEventTouchUpInside];
+        [nonePhotoView addSubview:button];
+    }
+    
+    if (_collectionView) {
+        [self.view insertSubview:nonePhotoView aboveSubview:_collectionView];
+    } else {
+        [self.view addSubview:nonePhotoView];
+    }
     _nonePhotoView = nonePhotoView;
+}
+
+- (void)removeNonePhotoView {
+    if (_nonePhotoView) {
+        [_nonePhotoView removeFromSuperview];
+        _nonePhotoView = nil;
+    }
 }
 
 - (void)configCollectionView {
     
-    if (_collectionView) {
-        [_collectionView removeFromSuperview];
-        _collectionView = nil;
-    }
     LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
     
     UICollectionViewFlowLayout *layout = [[UICollectionViewFlowLayout alloc] init];
@@ -431,7 +469,7 @@ CGFloat const bottomToolBarHeight = 50.f;
     
     
     if (imagePickerVc.allowPreview) {
-        CGSize previewSize = [imagePickerVc.previewBtnTitleStr boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX) options:NSStringDrawingUsesFontLeading attributes:@{NSFontAttributeName:toolbarTitleFont} context:nil].size;
+        CGSize previewSize = [imagePickerVc.previewBtnTitleStr lf_boundingSizeWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX) font:toolbarTitleFont];
         previewSize.width += 10.f;
         _previewButton = [UIButton buttonWithType:UIButtonTypeCustom];
         _previewButton.frame = CGRectMake(buttonX, 0, previewSize.width, bottomToolBarHeight);
@@ -441,6 +479,7 @@ CGFloat const bottomToolBarHeight = 50.f;
         [_previewButton setTitle:imagePickerVc.previewBtnTitleStr forState:UIControlStateNormal];
         [_previewButton setTitle:imagePickerVc.previewBtnTitleStr forState:UIControlStateDisabled];
         [_previewButton setTitleColor:toolbarTitleColorNormal forState:UIControlStateNormal];
+        [_previewButton setTitleColor:[toolbarTitleColorNormal colorWithAlphaComponent:kControlStateHighlightedAlpha] forState:UIControlStateHighlighted];
         [_previewButton setTitleColor:toolbarTitleColorDisabled forState:UIControlStateDisabled];
         _previewButton.enabled = imagePickerVc.selectedModels.count;
         
@@ -449,7 +488,7 @@ CGFloat const bottomToolBarHeight = 50.f;
     
     
     if (imagePickerVc.allowPickingOriginalPhoto && imagePickerVc.isPreview==NO) {
-        CGFloat fullImageWidth = [imagePickerVc.fullImageBtnTitleStr boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX) options:NSStringDrawingUsesFontLeading attributes:@{NSFontAttributeName:toolbarTitleFont} context:nil].size.width;
+        CGFloat fullImageWidth = [imagePickerVc.fullImageBtnTitleStr lf_boundingSizeWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX) font:toolbarTitleFont].width;
         _originalPhotoButton = [UIButton buttonWithType:UIButtonTypeCustom];
         CGFloat originalButtonW = fullImageWidth + 56;
         _originalPhotoButton.frame = CGRectMake((CGRectGetWidth(bottomToolBar.frame)-originalButtonW)/2, 0, originalButtonW, bottomToolBarHeight);
@@ -461,11 +500,15 @@ CGFloat const bottomToolBarHeight = 50.f;
         [_originalPhotoButton setTitle:imagePickerVc.fullImageBtnTitleStr forState:UIControlStateSelected];
         [_originalPhotoButton setTitle:imagePickerVc.fullImageBtnTitleStr forState:UIControlStateDisabled];
         [_originalPhotoButton setTitleColor:toolbarTitleColorNormal forState:UIControlStateNormal];
+        [_originalPhotoButton setTitleColor:[toolbarTitleColorNormal colorWithAlphaComponent:kControlStateHighlightedAlpha] forState:UIControlStateHighlighted];
         [_originalPhotoButton setTitleColor:toolbarTitleColorNormal forState:UIControlStateSelected];
+        [_originalPhotoButton setTitleColor:[toolbarTitleColorNormal colorWithAlphaComponent:kControlStateHighlightedAlpha] forState:UIControlStateSelected|UIControlStateHighlighted];
         [_originalPhotoButton setTitleColor:toolbarTitleColorDisabled forState:UIControlStateDisabled];
         [_originalPhotoButton setImage:bundleImageNamed(imagePickerVc.photoOriginDefImageName) forState:UIControlStateNormal];
         [_originalPhotoButton setImage:bundleImageNamed(imagePickerVc.photoOriginSelImageName) forState:UIControlStateSelected];
+        [_originalPhotoButton setImage:bundleImageNamed(imagePickerVc.photoOriginSelImageName) forState:UIControlStateSelected|UIControlStateHighlighted];
         [_originalPhotoButton setImage:bundleImageNamed(imagePickerVc.photoOriginDefImageName) forState:UIControlStateDisabled];
+        _originalPhotoButton.adjustsImageWhenHighlighted = NO;
         
         _originalPhotoLabel = [[UILabel alloc] init];
         _originalPhotoLabel.frame = CGRectMake(fullImageWidth + 46, 0, 80, bottomToolBarHeight);
@@ -478,7 +521,7 @@ CGFloat const bottomToolBarHeight = 50.f;
     }
     
     
-    CGSize doneSize = [[imagePickerVc.doneBtnTitleStr stringByAppendingFormat:@"(%ld)", (long)imagePickerVc.maxImagesCount] boundingRectWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX) options:NSStringDrawingUsesFontLeading attributes:@{NSFontAttributeName:toolbarTitleFont} context:nil].size;
+    CGSize doneSize = [[imagePickerVc.doneBtnTitleStr stringByAppendingFormat:@"(%ld)", (long)imagePickerVc.maxImagesCount] lf_boundingSizeWithSize:CGSizeMake(CGFLOAT_MAX, CGFLOAT_MAX) font:toolbarTitleFont];
     doneSize.height = MIN(MAX(doneSize.height, height), 30);
     doneSize.width += 10;
     
@@ -490,6 +533,7 @@ CGFloat const bottomToolBarHeight = 50.f;
     [_doneButton setTitle:imagePickerVc.doneBtnTitleStr forState:UIControlStateNormal];
     [_doneButton setTitle:imagePickerVc.doneBtnTitleStr forState:UIControlStateDisabled];
     [_doneButton setTitleColor:toolbarTitleColorNormal forState:UIControlStateNormal];
+    [_doneButton setTitleColor:[toolbarTitleColorNormal colorWithAlphaComponent:kControlStateHighlightedAlpha] forState:UIControlStateHighlighted];
     [_doneButton setTitleColor:toolbarTitleColorDisabled forState:UIControlStateDisabled];
     _doneButton.layer.cornerRadius = CGRectGetHeight(_doneButton.frame)*0.2;
     _doneButton.layer.masksToBounds = YES;
@@ -513,6 +557,12 @@ CGFloat const bottomToolBarHeight = 50.f;
 }
 
 #pragma mark - Click Event
+- (void)changedPhotoLimited {
+    if (@available(iOS 14, *)) {
+        [[PHPhotoLibrary sharedPhotoLibrary] presentLimitedLibraryPickerFromViewController:self];
+    }
+}
+
 //- (void)editButtonClick {
 //    LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
 //    NSArray *models = [imagePickerVc.selectedModels copy];
@@ -643,6 +693,7 @@ CGFloat const bottomToolBarHeight = 50.f;
                             if (imagePickerVc.allowPickingType & LFPickingMediaTypeLivePhoto && model.subType == LFAssetSubMediaTypeLivePhoto && model.closeLivePhoto == NO) {
                                 [[LFAssetManager manager] getLivePhotoWithAsset:model.asset
                                                                      isOriginal:imagePickerVc.isSelectOriginalPhoto
+                                                                  needThumbnail:(imagePickerVc.thumbnailCompressSize>0)
                                                                      completion:^(LFResultImage *resultImage) {
                                                                          
                                                                          resultComplete(resultImage, i);
@@ -732,7 +783,8 @@ CGFloat const bottomToolBarHeight = 50.f;
 #pragma mark - UICollectionViewDataSource && Delegate
 
 - (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section {
-    if (_showTakePhotoBtn) {
+    LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
+    if (imagePickerVc.allowTakePicture) {
         return _models.count + 1;
     }
     return _models.count;
@@ -741,7 +793,7 @@ CGFloat const bottomToolBarHeight = 50.f;
 - (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath {
     // the cell lead to take a picture / 去拍照的cell
     LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
-    if (((imagePickerVc.sortAscendingByCreateDate && indexPath.row >= _models.count) || (!imagePickerVc.sortAscendingByCreateDate && indexPath.row == 0)) && _showTakePhotoBtn) {
+    if (((imagePickerVc.sortAscendingByCreateDate && indexPath.row >= _models.count) || (!imagePickerVc.sortAscendingByCreateDate && indexPath.row == 0)) && imagePickerVc.allowTakePicture) {
         LFAssetCameraCell *cell = [collectionView dequeueReusableCellWithReuseIdentifier:@"LFAssetCameraCell" forIndexPath:indexPath];
         cell.posterImage = bundleImageNamed(imagePickerVc.takePictureImageName);
         
@@ -751,7 +803,7 @@ CGFloat const bottomToolBarHeight = 50.f;
     LFAssetCell *cell = nil;
     
     NSInteger index = indexPath.row - 1;
-    if (imagePickerVc.sortAscendingByCreateDate || !_showTakePhotoBtn) {
+    if (imagePickerVc.sortAscendingByCreateDate || !imagePickerVc.allowTakePicture) {
         index = indexPath.row;
     }
     LFAsset *model = _models[index];
@@ -827,77 +879,9 @@ CGFloat const bottomToolBarHeight = 50.f;
             
         } else {
             // 2. select:check if over the maxImagesCount / 选择照片,检查是否超过了最大个数的限制
-            
-            void (^selectedItem)(void) = ^{
-                /** 检测是否超过视频最大时长 */
-                if (cellModel.type == LFAssetMediaTypeVideo) {
-#ifdef LF_MEDIAEDIT
-                    LFVideoEdit *videoEdit = [[LFVideoEditManager manager] videoEditForAsset:cellModel];
-                    NSTimeInterval duration = videoEdit.editPreviewImage ? videoEdit.duration : cellModel.duration;
-#else
-                    NSTimeInterval duration = cellModel.duration;
-#endif
-                    if (lf_videoDuration(duration) > weakImagePickerVc.maxVideoDuration) {
-                        if (weakImagePickerVc.maxVideoDuration < 60) {
-                            [weakImagePickerVc showAlertWithTitle:[NSString stringWithFormat:[NSBundle lf_localizedStringForKey:@"_maxSelectVideoTipText_second"], (int)weakImagePickerVc.maxVideoDuration]];
-                        } else {
-                            [weakImagePickerVc showAlertWithTitle:[NSString stringWithFormat:[NSBundle lf_localizedStringForKey:@"_maxSelectVideoTipText_minute"], (int)weakImagePickerVc.maxVideoDuration/60]];
-                        }
-                        return;
-                    }
-                }
-                [weakImagePickerVc.selectedModels addObject:cellModel];
-                [weakSelf refreshBottomToolBarStatus];
-                
-                if (weakImagePickerVc.maxImagesCount != weakImagePickerVc.maxVideosCount) {
-                    
-                    BOOL refreshNoSelected = NO;
-                    if (weakImagePickerVc.selectedModels.firstObject.type == LFAssetMediaTypePhoto) {
-                        if (weakImagePickerVc.selectedModels.count == weakImagePickerVc.maxImagesCount) {
-                            [weakSelf refreshNoSelectedCell];
-                            refreshNoSelected = YES;
-                        }
-                    } else {
-                        if (weakImagePickerVc.selectedModels.count == weakImagePickerVc.maxVideosCount) {
-                            [weakSelf refreshNoSelectedCell];
-                            refreshNoSelected = YES;
-                        }
-                    }
-                    
-                    /** refreshNoSelected后没有必要再次刷新 */
-                    if (weakImagePickerVc.selectedModels.count == 1 && !refreshNoSelected) {
-                        if (weakImagePickerVc.selectedModels.firstObject.type == LFAssetMediaTypePhoto) {
-                            [weakSelf refreshVideoCell];
-                        } else {
-                            [weakSelf refreshImageCell];
-                        }
-                    }
-                    
-                } else if (weakImagePickerVc.selectedModels.count == weakImagePickerVc.maxImagesCount) {
-                    /** 选择到最大数量，禁止其他的可选显示 */
-                    [weakSelf refreshNoSelectedCell];
-                }
-                
+            if ([weakSelf addLFAsset:cellModel refreshCell:YES]) {
                 [weakCell selectPhoto:YES index:weakImagePickerVc.selectedModels.count animated:YES];
-            };
-            
-            if (weakImagePickerVc.maxImagesCount != weakImagePickerVc.maxVideosCount && cellModel.type == LFAssetMediaTypeVideo) {
-                if (weakImagePickerVc.selectedModels.count < weakImagePickerVc.maxVideosCount) {
-                    selectedItem();
-                } else {
-                    NSString *title = [NSString stringWithFormat:[NSBundle lf_localizedStringForKey:@"_maxSelectVideoTipText"], weakImagePickerVc.maxVideosCount];
-                    [weakImagePickerVc showAlertWithTitle:title];
-                }
-                
-            } else {
-                if (weakImagePickerVc.selectedModels.count < weakImagePickerVc.maxImagesCount) {
-                    selectedItem();
-                } else {
-                    NSString *title = [NSString stringWithFormat:[NSBundle lf_localizedStringForKey:@"_maxSelectPhotoTipText"], weakImagePickerVc.maxImagesCount];
-                    [weakImagePickerVc showAlertWithTitle:title];
-                }
             }
-            
         }
     };
     return cell;
@@ -914,11 +898,12 @@ CGFloat const bottomToolBarHeight = 50.f;
     cell.displayPhotoName = imagePickerVc.displayImageFilename;
     cell.onlySelected = !imagePickerVc.allowPreview;
     /** 优先级低属性，当最大数量为1时只能点击 */
-    if (imagePickerVc.maxImagesCount != imagePickerVc.maxVideosCount && model.type == LFAssetMediaTypeVideo) {
-        cell.onlyClick = imagePickerVc.maxVideosCount == 1;
-    } else {
-        cell.onlyClick = imagePickerVc.maxImagesCount == 1;
-    }
+    /** 当初实现这个属性是因为朋友圈，实际上它非常不合理。🔪 */
+//    if (imagePickerVc.maxImagesCount != imagePickerVc.maxVideosCount && model.type == LFAssetMediaTypeVideo) {
+//        cell.onlyClick = imagePickerVc.maxVideosCount == 1;
+//    } else {
+//        cell.onlyClick = imagePickerVc.maxImagesCount == 1;
+//    }
     /** 最大数量时，非选择部分显示不可选 */
     if (imagePickerVc.maxImagesCount != imagePickerVc.maxVideosCount) {
         /** 不能混合选择的情况 */
@@ -950,13 +935,13 @@ CGFloat const bottomToolBarHeight = 50.f;
 - (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath {
     // take a photo / 去拍照
     LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
-    if (((imagePickerVc.sortAscendingByCreateDate && indexPath.row >= _models.count) || (!imagePickerVc.sortAscendingByCreateDate && indexPath.row == 0)) && _showTakePhotoBtn)  {
+    if (((imagePickerVc.sortAscendingByCreateDate && indexPath.row >= _models.count) || (!imagePickerVc.sortAscendingByCreateDate && indexPath.row == 0)) && imagePickerVc.allowTakePicture)  {
         [self takePhoto];
         return;
     }
     // preview phote or video / 预览照片或视频
     NSInteger index = indexPath.row;
-    if (!imagePickerVc.sortAscendingByCreateDate && _showTakePhotoBtn) {
+    if (!imagePickerVc.sortAscendingByCreateDate && imagePickerVc.allowTakePicture) {
         index = indexPath.row - 1;
     }
     LFPhotoPreviewController *photoPreviewVc = [[LFPhotoPreviewController alloc] initWithModels:[_models copy] index:index];
@@ -985,35 +970,45 @@ CGFloat const bottomToolBarHeight = 50.f;
 #pragma mark UIImagePickerControllerDelegate methods
 - (void)imagePickerController:(UIImagePickerController *)picker didFinishPickingMediaWithInfo:(NSDictionary *)info
 {
+    if (picker.sourceType != UIImagePickerControllerSourceTypeCamera) {
+        [picker dismissViewControllerAnimated:YES completion:nil];
+        return;
+    }
     LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
     [imagePickerVc showProgressHUDText:nil isTop:YES];
     
+    BOOL hasUsingMedia = NO;
+    
     NSString *mediaType = [info objectForKey:UIImagePickerControllerMediaType];
-    if (picker.sourceType==UIImagePickerControllerSourceTypeCamera && [mediaType isEqualToString:@"public.image"]){
+    if ([mediaType isEqualToString:(NSString *)kUTTypeImage]){
         UIImage *chosenImage = info[UIImagePickerControllerOriginalImage];
-        [[LFAssetManager manager] saveImageToCustomPhotosAlbumWithTitle:nil images:@[chosenImage] complete:^(NSArray<id> *assets, NSError *error) {
-            
-            if (assets && !error) {
-                [[LFAssetManager manager] getPhotoWithAsset:assets.lastObject
-                                                 isOriginal:YES
-                                                 pickingGif:NO
-                                               compressSize:imagePickerVc.imageCompressSize
-                                      thumbnailCompressSize:imagePickerVc.thumbnailCompressSize
-                                                 completion:^(LFResultImage *resultImage) {
-                                                     
-                                                     [imagePickerVc hideProgressHUD];
-                                                     [picker.presentingViewController.presentingViewController dismissViewControllerAnimated:YES completion:^{
-                                                         [self callDelegateMethodWithResults:@[resultImage]];
-                                                     }];
-                                                 }];
-            }else if (error) {
-                [imagePickerVc hideProgressHUD];
-                [imagePickerVc showAlertWithTitle:[NSBundle lf_localizedStringForKey:@"_cameraTakePhotoError"] message:error.localizedDescription complete:^{
-                    [picker dismissViewControllerAnimated:YES completion:nil];
+        if (chosenImage) {
+            hasUsingMedia = YES;
+            [self cameraPhoto:chosenImage completionHandler:^(NSError *error) {
+                if (error) {
+                    [imagePickerVc showAlertWithTitle:[NSBundle lf_localizedStringForKey:@"_cameraTakePhotoError"] message:error.localizedDescription complete:^{
+                    }];
+                }
+                [picker dismissViewControllerAnimated:YES completion:^{
                 }];
-            }
-        }];
-    } else {
+            }];
+        }
+    } else if ([mediaType isEqualToString:(NSString *)kUTTypeMovie]) {
+        NSURL *videoUrl = [info objectForKey:UIImagePickerControllerMediaURL];
+        if (videoUrl) {
+            hasUsingMedia = YES;
+            [self cameraVideo:videoUrl completionHandler:^(NSError *error) {
+                if (error) {
+                    [imagePickerVc showAlertWithTitle:[NSBundle lf_localizedStringForKey:@"_cameraTakeVideoError"] message:error.localizedDescription complete:^{
+                    }];
+                }
+                [picker dismissViewControllerAnimated:YES completion:^{
+                }];
+            }];
+        }
+    }
+    
+    if (!hasUsingMedia) {
         [imagePickerVc hideProgressHUD];
         [picker dismissViewControllerAnimated:YES completion:nil];
     }
@@ -1036,7 +1031,7 @@ CGFloat const bottomToolBarHeight = 50.f;
     if (indexPath) {
         // preview phote or video / 预览照片或视频
         NSInteger index = indexPath.row;
-        if (!imagePickerVc.sortAscendingByCreateDate && _showTakePhotoBtn) {
+        if (!imagePickerVc.sortAscendingByCreateDate && imagePickerVc.allowTakePicture) {
             index = indexPath.row - 1;
         }
         LFPhotoPreviewController *photoPreviewVc = [[LFPhotoPreviewController alloc] initWithModels:[_models copy] index:index];
@@ -1100,7 +1095,11 @@ CGFloat const bottomToolBarHeight = 50.f;
             [self doneButtonClick];
         }]];
         
-        [alert addAction:[UIAlertAction actionWithTitle:@"Discard Select" style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
+        [alert addAction:[UIAlertAction actionWithTitle:imagePickerVc.cancelBtnTitleStr style:UIAlertActionStyleCancel handler:^(UIAlertAction * _Nonnull action) {
+
+        }]];
+        
+        [alert addAction:[UIAlertAction actionWithTitle:[NSBundle lf_localizedStringForKey:@"_discardTitleStr"] style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wundeclared-selector"
             if ([imagePickerVc respondsToSelector:@selector(cancelButtonClick)]) {
@@ -1108,8 +1107,6 @@ CGFloat const bottomToolBarHeight = 50.f;
             }
 #pragma clang diagnostic pop
         }]];
-        
-        [alert addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleDefault handler:nil]];
         
         // The popover should point at the Cancel button
         alert.popoverPresentationController.barButtonItem = self.navigationItem.leftBarButtonItem;
@@ -1129,46 +1126,245 @@ CGFloat const bottomToolBarHeight = 50.f;
 
 - (void)takePhoto {
     LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
-    AVAuthorizationStatus authStatus = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
-    if ((authStatus == AVAuthorizationStatusRestricted || authStatus ==AVAuthorizationStatusDenied)) {
-        // 无权限 做一个友好的提示
-        NSString *appName = [[NSBundle mainBundle].infoDictionary valueForKey:@"CFBundleDisplayName"];
-        if (!appName) appName = [[NSBundle mainBundle].infoDictionary valueForKey:@"CFBundleName"];
-        NSString *message = [NSString stringWithFormat:[NSBundle lf_localizedStringForKey:@"_cameraLibraryAuthorityTipText"],appName];
-        [imagePickerVc showAlertWithTitle:nil cancelTitle:[NSBundle lf_localizedStringForKey:@"_cameraLibraryAuthorityCancelTitle"] message:message complete:^{
-            if (@available(iOS 8.0, *)){
-                if (@available(iOS 10.0, *)){
-                    [[UIApplication sharedApplication] openURL:[NSURL URLWithString:UIApplicationOpenSettingsURLString] options:@{} completionHandler:nil];
-                } else {
-                    [[UIApplication sharedApplication] openURL:[NSURL URLWithString:UIApplicationOpenSettingsURLString]];
-                }
-            } else {
-                NSString *message = [NSBundle lf_localizedStringForKey:@"_PrivacyAuthorityJumpTipText"];
-                [imagePickerVc showAlertWithTitle:nil message:message complete:^{
-                }];
-            }
-        }];
+    
+    if (imagePickerVc.maxImagesCount != imagePickerVc.maxVideosCount && imagePickerVc.selectedModels.firstObject.type == LFAssetMediaTypeVideo) {
+        if (imagePickerVc.selectedModels.count >= imagePickerVc.maxVideosCount) {
+            NSString *title = [NSString stringWithFormat:[NSBundle lf_localizedStringForKey:@"_maxSelectVideoTipText"], imagePickerVc.maxVideosCount];
+            [imagePickerVc showAlertWithTitle:title];
+            return;
+        }
+    } else {
+        if (imagePickerVc.selectedModels.count >= imagePickerVc.maxImagesCount) {
+            NSString *title = [NSString stringWithFormat:[NSBundle lf_localizedStringForKey:@"_maxSelectPhotoTipText"], imagePickerVc.maxImagesCount];
+            [imagePickerVc showAlertWithTitle:title];
+            return;
+        }
+    }
+    
+    BOOL onlyPhoto = NO;
+    BOOL onlyVideo = NO;
+    if (imagePickerVc.selectedModels.count) {
+        onlyPhoto = imagePickerVc.maxImagesCount != imagePickerVc.maxVideosCount && imagePickerVc.selectedModels.firstObject.type == LFAssetMediaTypePhoto;
+        onlyVideo = imagePickerVc.maxImagesCount != imagePickerVc.maxVideosCount && imagePickerVc.selectedModels.firstObject.type == LFAssetMediaTypeVideo;
+    }
+    UIImagePickerControllerSourceType srcType = UIImagePickerControllerSourceTypeCamera;
+    if ([UIImagePickerController isSourceTypeAvailable: srcType]) {
         
-    } else { // 调用相机
-        if ([UIImagePickerController isSourceTypeAvailable: UIImagePickerControllerSourceTypeCamera]) {
-            if ([imagePickerVc.pickerDelegate respondsToSelector:@selector(lf_imagePickerControllerTakePhoto:)]) {
-                [imagePickerVc.pickerDelegate lf_imagePickerControllerTakePhoto:imagePickerVc];
-            } else if (imagePickerVc.imagePickerControllerTakePhoto) {
-                imagePickerVc.imagePickerControllerTakePhoto();
+        /** 优先判断是否存在相册的读写权限 */
+//        [[LFAssetManager manager] lf_authorizationStatus]
+        
+        
+        __weak typeof(self) weakSelf = self;
+        __weak typeof(imagePickerVc) weakImagePickerVc = imagePickerVc;
+        [self requestAccessForCameraCompletionHandler:^{
+            
+            lf_takePhotoHandler handler = ^(id media, NSString *mediaType, lf_takePhotoCallback callback) {
+                
+                [weakImagePickerVc showProgressHUDText:nil isTop:YES];
+                
+                if ([mediaType isEqualToString:(NSString *)kUTTypeImage]){
+                    [weakSelf cameraPhoto:media completionHandler:^(NSError *error) {
+                        [weakImagePickerVc hideProgressHUD];
+                        if (callback) {
+                            callback(weakImagePickerVc, error);
+                        }
+                    }];
+                } else if ([mediaType isEqualToString:(NSString *)kUTTypeMovie]) {
+                    [weakSelf cameraVideo:media completionHandler:^(NSError *error) {
+                        [weakImagePickerVc hideProgressHUD];
+                        if (callback) {
+                            callback(weakImagePickerVc, error);
+                        }
+                    }];
+                } else {
+                    [weakImagePickerVc hideProgressHUD];
+                    if (callback) {
+                        NSError *error = [NSError errorWithDomain:@"LFImagePickerController" code:101 userInfo:@{NSLocalizedDescriptionKey:@"Incorrect parameters."}];
+                        callback(weakImagePickerVc, error);
+                    }
+                }
+            };
+            
+            if ([imagePickerVc.pickerDelegate respondsToSelector:@selector(lf_imagePickerController:takePhotoHandler:)]) {
+                [imagePickerVc.pickerDelegate lf_imagePickerController:imagePickerVc takePhotoHandler:handler];
+            } else if (imagePickerVc.imagePickerControllerTakePhotoHandle) {
+                imagePickerVc.imagePickerControllerTakePhotoHandle(handler);
             } else {
                 /** 调用内置相机模块 */
-                UIImagePickerControllerSourceType srcType = UIImagePickerControllerSourceTypeCamera;
                 UIImagePickerController *mediaPickerController = [[UIImagePickerController alloc] init];
+                // set appearance / 改变相册选择页的导航栏外观
+                {
+                    mediaPickerController.navigationBar.barTintColor = imagePickerVc.navigationBar.barTintColor;
+                    mediaPickerController.navigationBar.tintColor = imagePickerVc.navigationBar.tintColor;
+                    NSMutableDictionary *textAttrs = [NSMutableDictionary dictionary];
+                    UIBarButtonItem *barItem;
+                    if (@available(iOS 9.0, *)){
+                        barItem = [UIBarButtonItem appearanceWhenContainedInInstancesOfClasses:@[[UIImagePickerController class]]];
+                    } else {
+                        barItem = [UIBarButtonItem appearanceWhenContainedIn:[UIImagePickerController class], nil];
+                    }
+                    textAttrs[NSForegroundColorAttributeName] = imagePickerVc.barItemTextColor;
+                    textAttrs[NSFontAttributeName] = imagePickerVc.barItemTextFont;
+                    [barItem setTitleTextAttributes:textAttrs forState:UIControlStateNormal];
+                }
                 mediaPickerController.sourceType = srcType;
-                mediaPickerController.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
                 mediaPickerController.delegate = self;
-                mediaPickerController.mediaTypes = [[NSArray alloc] initWithObjects: (NSString *) kUTTypeImage, nil];
+                
+                NSMutableArray *mediaTypes = [NSMutableArray array];
+                
+                if (imagePickerVc.allowPickingType & LFPickingMediaTypePhoto && imagePickerVc.selectedModels.count < imagePickerVc.maxImagesCount && !onlyVideo) {
+                    [mediaTypes addObject:(NSString *)kUTTypeImage];
+                }
+                if (imagePickerVc.allowPickingType & LFPickingMediaTypeVideo && imagePickerVc.selectedModels.count < imagePickerVc.maxVideosCount && !onlyPhoto) {
+                    [mediaTypes addObject:(NSString *)kUTTypeMovie];
+                    mediaPickerController.videoMaximumDuration = imagePickerVc.maxVideoDuration;
+                }
+                
+                mediaPickerController.mediaTypes = mediaTypes;
                 
                 /** warning：Snapshotting a view that has not been rendered results in an empty snapshot. Ensure your view has been rendered at least once before snapshotting or snapshot after screen updates. */
                 [self presentViewController:mediaPickerController animated:YES completion:NULL];
             }
+        }];
+    } else {
+        NSLog(@"模拟器中无法打开照相机,请在真机中使用");
+    }
+}
+
+- (BOOL)addLFAsset:(LFAsset *)asset refreshCell:(BOOL)refreshCell
+{
+    LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
+    
+    __weak typeof(self) weakSelf = self;
+    __weak typeof(imagePickerVc) weakImagePickerVc = imagePickerVc;
+    BOOL (^selectedItem)(LFAsset *model, BOOL refresh) = ^BOOL (LFAsset *model, BOOL refresh){
+        /** 检测是否超过视频最大时长 */
+        if (model.type == LFAssetMediaTypeVideo) {
+#ifdef LF_MEDIAEDIT
+            LFVideoEdit *videoEdit = [[LFVideoEditManager manager] videoEditForAsset:model];
+            NSTimeInterval duration = videoEdit.editPreviewImage ? videoEdit.duration : model.duration;
+#else
+            NSTimeInterval duration = model.duration;
+#endif
+            if (lf_videoDuration(duration) > weakImagePickerVc.maxVideoDuration) {
+                if (weakImagePickerVc.maxVideoDuration < 60) {
+                    [weakImagePickerVc showAlertWithTitle:[NSString stringWithFormat:[NSBundle lf_localizedStringForKey:@"_maxSelectVideoTipText_second"], (int)weakImagePickerVc.maxVideoDuration]];
+                } else {
+                    [weakImagePickerVc showAlertWithTitle:[NSString stringWithFormat:[NSBundle lf_localizedStringForKey:@"_maxSelectVideoTipText_minute"], (int)weakImagePickerVc.maxVideoDuration/60]];
+                }
+                return NO;
+            }
+        }
+        [weakImagePickerVc.selectedModels addObject:model];
+        [weakSelf refreshBottomToolBarStatus];
+        
+        if (refresh) {
+            if (weakImagePickerVc.maxImagesCount != weakImagePickerVc.maxVideosCount) {
+                
+                BOOL refreshNoSelected = NO;
+                if (weakImagePickerVc.selectedModels.firstObject.type == LFAssetMediaTypePhoto) {
+                    if (weakImagePickerVc.selectedModels.count == weakImagePickerVc.maxImagesCount) {
+                        [weakSelf refreshNoSelectedCell];
+                        refreshNoSelected = YES;
+                    }
+                } else {
+                    if (weakImagePickerVc.selectedModels.count == weakImagePickerVc.maxVideosCount) {
+                        [weakSelf refreshNoSelectedCell];
+                        refreshNoSelected = YES;
+                    }
+                }
+                
+                /** refreshNoSelected后没有必要再次刷新 */
+                if (weakImagePickerVc.selectedModels.count == 1 && !refreshNoSelected) {
+                    if (weakImagePickerVc.selectedModels.firstObject.type == LFAssetMediaTypePhoto) {
+                        [weakSelf refreshVideoCell];
+                    } else {
+                        [weakSelf refreshImageCell];
+                    }
+                }
+                
+            } else if (weakImagePickerVc.selectedModels.count == weakImagePickerVc.maxImagesCount) {
+                /** 选择到最大数量，禁止其他的可选显示 */
+                [weakSelf refreshNoSelectedCell];
+            }
+        }
+        return YES;
+    };
+    
+    if (imagePickerVc.maxImagesCount != imagePickerVc.maxVideosCount && asset.type == LFAssetMediaTypeVideo) {
+        if (imagePickerVc.selectedModels.count < imagePickerVc.maxVideosCount) {
+            return selectedItem(asset, refreshCell);
         } else {
-            NSLog(@"模拟器中无法打开照相机,请在真机中使用");
+            NSString *title = [NSString stringWithFormat:[NSBundle lf_localizedStringForKey:@"_maxSelectVideoTipText"], imagePickerVc.maxVideosCount];
+            [imagePickerVc showAlertWithTitle:title];
+        }
+        
+    } else {
+        if (imagePickerVc.selectedModels.count < imagePickerVc.maxImagesCount) {
+            return selectedItem(asset, refreshCell);
+        } else {
+            NSString *title = [NSString stringWithFormat:[NSBundle lf_localizedStringForKey:@"_maxSelectPhotoTipText"], imagePickerVc.maxImagesCount];
+            [imagePickerVc showAlertWithTitle:title];
+        }
+    }
+    return NO;
+}
+
+- (void)cameraPhoto:(UIImage *)image completionHandler:(void (^)(NSError *error))handler
+{
+    if (image && [image isKindOfClass:[UIImage class]]) {
+        LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
+        [[LFAssetManager manager] saveImageToCustomPhotosAlbumWithTitle:self.titleView.title images:@[image] complete:^(NSArray<id> *assets, NSError *error) {
+            
+            if (assets && !error) {
+                LFAsset *asset = [[LFAsset alloc] initWithAsset:assets.lastObject];
+                [self addLFAsset:asset refreshCell:NO];
+                if (!imagePickerVc.syncAlbum) {
+                    
+                    [self manualSaveAsset:asset smartAlbum:LFAlbumSmartAlbumUserLibrary];
+                    /** refresh title view */
+                    self.titleView.albumArr = self.albumArr;
+                }
+            }
+            [imagePickerVc hideProgressHUD];
+            
+            if (handler) {
+                handler(error);
+            }
+        }];
+    } else {
+        if (handler) {
+            NSError *error = [NSError errorWithDomain:@"LFImagePickerController" code:100 userInfo:@{NSLocalizedDescriptionKey:@"Incorrect parameters."}];
+            handler(error);
+        }
+    }
+}
+
+- (void)cameraVideo:(NSURL *)videoUrl completionHandler:(void (^)(NSError *error))handler
+{
+    if (videoUrl && [videoUrl isKindOfClass:[NSURL class]]) {
+        LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
+        [[LFAssetManager manager] saveVideoToCustomPhotosAlbumWithTitle:self.titleView.title videoURLs:@[videoUrl] complete:^(NSArray<id> *assets, NSError *error) {
+            if (assets && !error) {
+                LFAsset *asset = [[LFAsset alloc] initWithAsset:assets.lastObject];
+                [self addLFAsset:asset refreshCell:NO];
+                if (!imagePickerVc.syncAlbum) {
+                    [self manualSaveAsset:asset smartAlbum:LFAlbumSmartAlbumUserLibrary];
+                    [self manualSaveAsset:asset smartAlbum:LFAlbumSmartAlbumVideos];
+                    /** refresh title view */
+                    self.titleView.albumArr = self.albumArr;
+                }
+            }
+            [imagePickerVc hideProgressHUD];
+            
+            if (handler) {
+                handler(error);
+            }
+        }];
+    } else {
+        if (handler) {
+            NSError *error = [NSError errorWithDomain:@"LFImagePickerController" code:100 userInfo:@{NSLocalizedDescriptionKey:@"Incorrect parameters."}];
+            handler(error);
         }
     }
 }
@@ -1181,7 +1377,7 @@ CGFloat const bottomToolBarHeight = 50.f;
         [self.collectionView.visibleCells enumerateObjectsUsingBlock:^(LFAssetCell *cell, NSUInteger idx, BOOL * _Nonnull stop) {
             if ([cell isKindOfClass:[LFAssetCell class]] && [imagePickerVc.selectedModels containsObject:cell.model]) {
                 NSInteger index = [self->_models indexOfObject:cell.model];
-                if (self->_showTakePhotoBtn && !imagePickerVc.sortAscendingByCreateDate) {
+                if (imagePickerVc.allowTakePicture && !imagePickerVc.sortAscendingByCreateDate) {
                     index += 1;
                 }
                 [indexPaths addObject:[NSIndexPath indexPathForRow:index inSection:0]];
@@ -1201,7 +1397,7 @@ CGFloat const bottomToolBarHeight = 50.f;
     [self.collectionView.visibleCells enumerateObjectsUsingBlock:^(LFAssetCell *cell, NSUInteger idx, BOOL * _Nonnull stop) {
         if ([cell isKindOfClass:[LFAssetCell class]] && ![imagePickerVc.selectedModels containsObject:cell.model]) {
             NSInteger index = [weakSelf.models indexOfObject:cell.model];
-            if (self->_showTakePhotoBtn && !imagePickerVc.sortAscendingByCreateDate) {
+            if (imagePickerVc.allowTakePicture && !imagePickerVc.sortAscendingByCreateDate) {
                 index += 1;
             }
             [indexPaths addObject:[NSIndexPath indexPathForRow:index inSection:0]];
@@ -1220,7 +1416,7 @@ CGFloat const bottomToolBarHeight = 50.f;
     [self.collectionView.visibleCells enumerateObjectsUsingBlock:^(LFAssetCell *cell, NSUInteger idx, BOOL * _Nonnull stop) {
         if ([cell isKindOfClass:[LFAssetCell class]] && ![cell isEqual:myCell]) {
             NSInteger index = [weakSelf.models indexOfObject:cell.model];
-            if (self->_showTakePhotoBtn && !imagePickerVc.sortAscendingByCreateDate) {
+            if (imagePickerVc.allowTakePicture && !imagePickerVc.sortAscendingByCreateDate) {
                 index += 1;
             }
             [indexPaths addObject:[NSIndexPath indexPathForRow:index inSection:0]];
@@ -1239,7 +1435,7 @@ CGFloat const bottomToolBarHeight = 50.f;
     [self.collectionView.visibleCells enumerateObjectsUsingBlock:^(LFAssetCell *cell, NSUInteger idx, BOOL * _Nonnull stop) {
         if ([cell isKindOfClass:[LFAssetCell class]] && cell.model.type == LFAssetMediaTypePhoto) {
             NSInteger index = [weakSelf.models indexOfObject:cell.model];
-            if (self->_showTakePhotoBtn && !imagePickerVc.sortAscendingByCreateDate) {
+            if (imagePickerVc.allowTakePicture && !imagePickerVc.sortAscendingByCreateDate) {
                 index += 1;
             }
             [indexPaths addObject:[NSIndexPath indexPathForRow:index inSection:0]];
@@ -1257,7 +1453,7 @@ CGFloat const bottomToolBarHeight = 50.f;
     [self.collectionView.visibleCells enumerateObjectsUsingBlock:^(LFAssetCell *cell, NSUInteger idx, BOOL * _Nonnull stop) {
         if ([cell isKindOfClass:[LFAssetCell class]] && cell.model.type == LFAssetMediaTypeVideo) {
             NSInteger index = [weakSelf.models indexOfObject:cell.model];
-            if (self->_showTakePhotoBtn && !imagePickerVc.sortAscendingByCreateDate) {
+            if (imagePickerVc.allowTakePicture && !imagePickerVc.sortAscendingByCreateDate) {
                 index += 1;
             }
             [indexPaths addObject:[NSIndexPath indexPathForRow:index inSection:0]];
@@ -1378,9 +1574,9 @@ CGFloat const bottomToolBarHeight = 50.f;
 
 - (void)scrollCollectionViewToBottom {
     LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
-    if (_models.count > 0 && imagePickerVc.sortAscendingByCreateDate) {
+    if (_models.count > 0 && imagePickerVc.sortAscendingByCreateDate && _collectionView) {
         NSInteger item = _models.count - 1;
-        if (_showTakePhotoBtn) {
+        if (imagePickerVc.allowTakePicture) {
             item += 1;
         }
         [_collectionView scrollToItemAtIndexPath:[NSIndexPath indexPathForItem:item inSection:0] atScrollPosition:UICollectionViewScrollPositionBottom animated:NO];
@@ -1396,6 +1592,9 @@ CGFloat const bottomToolBarHeight = 50.f;
             LFAsset *asset = nil;
             if ([object isKindOfClass:[PHAsset class]] || [object isKindOfClass:[ALAsset class]]) {
                 asset = [[LFAsset alloc] initWithAsset:object];
+                if (asset.subType == LFAssetSubMediaTypeLivePhoto) {
+                    asset.closeLivePhoto = !imagePickerVc.autoPlayLivePhoto;
+                }
             }
             else if ([object conformsToProtocol:@protocol(LFAssetImageProtocol)]) {
                 asset = [[LFAsset alloc] initWithObject:object];
@@ -1428,6 +1627,36 @@ CGFloat const bottomToolBarHeight = 50.f;
     }
     /** 只执行一次 */
     imagePickerVc.selectedAssets = nil;
+}
+
+- (void)manualSaveAsset:(LFAsset *)asset smartAlbum:(LFAlbumSmartAlbum)smartAlbum
+{
+    LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
+    
+    LFAlbum *model = nil;
+    for (LFAlbum *album in self.albumArr) {
+        if (album.smartAlbum == smartAlbum) {
+            model = album;
+            break;
+        }
+    }
+    
+    NSMutableArray *models = nil;
+    if ([model isEqual:self.model]) {
+        models = self.models;
+    } else {
+        models = [model.models mutableCopy];
+    }
+    
+    if (imagePickerVc.sortAscendingByCreateDate) {
+        [models addObject:asset];
+    } else {
+        [models insertObject:asset atIndex:0];
+    }
+    model.models = [models copy];
+    if ([model isEqual:self.model]) {
+        [self.collectionView reloadData];
+    }
 }
 
 - (void)didReceiveMemoryWarning {
@@ -1481,10 +1710,11 @@ CGFloat const bottomToolBarHeight = 50.f;
                 // Get the new fetch result for future change tracking.
                 [album changedResult:collectionChanges.fetchResultAfterChanges];
                 
-                if (collectionChanges.hasIncrementalChanges)  {
+                // iOS14 PHAuthorizationStatusLimited, BeforeChangesCount != AfterChangesCount
+                if (collectionChanges.hasIncrementalChanges || collectionChanges.fetchResultAfterChanges.count !=  collectionChanges.fetchResultBeforeChanges.count)  {
                     // Tell the collection view to animate insertions/deletions/moves
                     // and to refresh any cells that have changed content.
-                    
+                    // clean album cache
                     album.models = nil;
                     album.posterAsset = nil;
                     
@@ -1535,47 +1765,43 @@ CGFloat const bottomToolBarHeight = 50.f;
         // Check for changes to the list of assets (insertions, deletions, moves, or updates).
         PHFetchResultChangeDetails *collectionChanges = currentCollectionChanges;
         if (collectionChanges) {
-            // Get the new fetch result for future change tracking.
-            [self.model changedResult:collectionChanges.fetchResultAfterChanges];
-            
-            if (collectionChanges.hasIncrementalChanges)  {
-                // Tell the collection view to animate insertions/deletions/moves
-                // and to refresh any cells that have changed content.
-                
-                [self loadAlbumData:^{
-                    /** 更新已选数组 */
-                    if (imagePickerVc.selectedModels.count && collectionChanges.removedObjects.count) {
-                        for (id object in collectionChanges.removedObjects) {
-                            LFAsset *asset = nil;
-                            if ([object isKindOfClass:[PHAsset class]] || [object isKindOfClass:[ALAsset class]]) {
-                                asset = [[LFAsset alloc] initWithAsset:object];
-                            }
-                            if (asset) {
-                                [imagePickerVc.selectedModels removeObject:asset];
-                            }
+            // Reload data
+            [self loadAlbumData:^{
+                /** 更新已选数组 */
+                if (imagePickerVc.selectedModels.count && collectionChanges.removedObjects.count) {
+                    for (id object in collectionChanges.removedObjects) {
+                        LFAsset *asset = nil;
+                        if ([object isKindOfClass:[PHAsset class]] || [object isKindOfClass:[ALAsset class]]) {
+                            asset = [[LFAsset alloc] initWithAsset:object];
                         }
-                    }
-                    [self.collectionView reloadData];
-                    [self scrollCollectionViewToBottom];
-                }];
-                
-                if (collectionChanges.removedObjects.count) {
-                    /** 刷新后返回当前UI */
-                    if (self.presentedViewController) {
-                        [self.presentedViewController dismissViewControllerAnimated:NO completion:^{
-                            if (imagePickerVc.viewControllers.lastObject != self) {
-                                [imagePickerVc popToViewController:self animated:NO];
-                            }
-                        }];
-                    } else {
-                        if (imagePickerVc.viewControllers.lastObject != self) {
-                            [imagePickerVc popToViewController:self animated:NO];
+                        if (asset) {
+                            [imagePickerVc.selectedModels removeObject:asset];
                         }
                     }
                 }
-            } else {
-                // Detailed change information is not available;
-                // repopulate the UI from the current fetch result.
+                [self.collectionView reloadData];
+                [self scrollCollectionViewToBottom];
+                if (self.models.count == 0 && !imagePickerVc.allowTakePicture) {
+                    // 添加没有图片的提示
+                    [self configNonePhotoView];
+                } else {
+                    [self removeNonePhotoView];
+                }
+            }];
+            
+            if (collectionChanges.removedObjects.count) {
+                /** 刷新后返回当前UI */
+                if (self.presentedViewController) {
+                    [self.presentedViewController dismissViewControllerAnimated:NO completion:^{
+                        if (imagePickerVc.viewControllers.lastObject != self) {
+                            [imagePickerVc popToViewController:self animated:NO];
+                        }
+                    }];
+                } else {
+                    if (imagePickerVc.viewControllers.lastObject != self) {
+                        [imagePickerVc popToViewController:self animated:NO];
+                    }
+                }
             }
         }
     });
@@ -1600,7 +1826,10 @@ CGFloat const bottomToolBarHeight = 50.f;
 - (void)orientationDidChange:(NSNotification *)notify
 {
     if (UIDeviceOrientationIsValidInterfaceOrientation([[UIDevice currentDevice] orientation])) {
-        
+        LFImagePickerController *imagePickerVc = (LFImagePickerController *)self.navigationController;
+        if (_collectionView == nil) {
+            return;
+        }
         // 计算collectionView旋转后的相对位置
         CGRect collectionViewRect = _collectionView.frame;
         CGRect oldCollectionViewRect = _collectionView.oldCollectionViewRect;
@@ -1615,7 +1844,7 @@ CGFloat const bottomToolBarHeight = 50.f;
             // 一行的数量
             int columnNumber = (int)(collectionViewRect.size.width / (itemWH + margin));
             // 总数/每行的数量=总行数
-            int lineNumber = (int)((_models.count + columnNumber - 1 + (_showTakePhotoBtn ? 1 : 0)) / columnNumber);
+            int lineNumber = (int)((_models.count + columnNumber - 1 + (imagePickerVc.allowTakePicture ? 1 : 0)) / columnNumber);
             // 总行数*每行高度+总行数之间的间距 (上下间距 不在contentSize范围内)
             CGFloat newContentSizeHeight = lineNumber * itemWH + (lineNumber - 1) * margin;// + margin * 2;
 

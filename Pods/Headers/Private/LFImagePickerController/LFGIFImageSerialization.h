@@ -1,1 +1,0 @@
-../../../LFImagePickerController/LFImagePickerController/LFImagePickerController/class/utils/GIFUtils/LFGIFImageSerialization.h

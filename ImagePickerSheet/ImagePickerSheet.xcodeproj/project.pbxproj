@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		66970ACCBC97D6EEB1C269B3 /* Pods_ImagePickerSheet.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D02FDB685A7A3AE8A0565DA9 /* Pods_ImagePickerSheet.framework */; };
 		6F1DC4F41DB857CB00979C6B /* AssetsLibrary.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6F1DC4F31DB857CB00979C6B /* AssetsLibrary.framework */; settings = {ATTRIBUTES = (Required, ); }; };
 		6F81014B1B4CD5A000BF3C13 /* ImagePreviewFlowLayout.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F81014A1B4CD5A000BF3C13 /* ImagePreviewFlowLayout.m */; };
 		6FB970C51DF53C7F009A493A /* Photos.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6FB970C31DF53C59009A493A /* Photos.framework */; settings = {ATTRIBUTES = (Weak, ); }; };
@@ -22,7 +23,6 @@
 		6FD4AE871B4CAC9A00801864 /* ImageCollectionViewCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 6FD4AE861B4CAC9A00801864 /* ImageCollectionViewCell.m */; };
 		6FD4AE8A1B4CBD5A00801864 /* PreviewSupplementaryView.m in Sources */ = {isa = PBXBuildFile; fileRef = 6FD4AE891B4CBD5A00801864 /* PreviewSupplementaryView.m */; };
 		6FD4AE8C1B4CC91800801864 /* SupplementaryView.bundle in Resources */ = {isa = PBXBuildFile; fileRef = 6FD4AE8B1B4CC91800801864 /* SupplementaryView.bundle */; };
-		FD8BCF5901677CB7AB2DCAFA /* libPods-ImagePickerSheet.a in Frameworks */ = {isa = PBXBuildFile; fileRef = FEA47002FE2EC3C05BC7D0D5 /* libPods-ImagePickerSheet.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -54,7 +54,7 @@
 		6FD4AE881B4CBD5A00801864 /* PreviewSupplementaryView.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = PreviewSupplementaryView.h; sourceTree = "<group>"; };
 		6FD4AE891B4CBD5A00801864 /* PreviewSupplementaryView.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = PreviewSupplementaryView.m; sourceTree = "<group>"; };
 		6FD4AE8B1B4CC91800801864 /* SupplementaryView.bundle */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.plug-in"; path = SupplementaryView.bundle; sourceTree = "<group>"; };
-		FEA47002FE2EC3C05BC7D0D5 /* libPods-ImagePickerSheet.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-ImagePickerSheet.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		D02FDB685A7A3AE8A0565DA9 /* Pods_ImagePickerSheet.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_ImagePickerSheet.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -64,7 +64,7 @@
 			files = (
 				6FB970C51DF53C7F009A493A /* Photos.framework in Frameworks */,
 				6F1DC4F41DB857CB00979C6B /* AssetsLibrary.framework in Frameworks */,
-				FD8BCF5901677CB7AB2DCAFA /* libPods-ImagePickerSheet.a in Frameworks */,
+				66970ACCBC97D6EEB1C269B3 /* Pods_ImagePickerSheet.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -76,7 +76,7 @@
 			children = (
 				6FB970C31DF53C59009A493A /* Photos.framework */,
 				6F1DC4F31DB857CB00979C6B /* AssetsLibrary.framework */,
-				FEA47002FE2EC3C05BC7D0D5 /* libPods-ImagePickerSheet.a */,
+				D02FDB685A7A3AE8A0565DA9 /* Pods_ImagePickerSheet.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -165,7 +165,7 @@
 				6FD4AE4B1B4BCD4400801864 /* Sources */,
 				6FD4AE4C1B4BCD4400801864 /* Frameworks */,
 				6FD4AE4D1B4BCD4400801864 /* Resources */,
-				7F5FD3794432D013A43E6170 /* [CP] Copy Pods Resources */,
+				D53FA679D4A36954B8D647F0 /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -224,24 +224,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		7F5FD3794432D013A43E6170 /* [CP] Copy Pods Resources */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-ImagePickerSheet/Pods-ImagePickerSheet-resources.sh",
-				"${PODS_ROOT}/LFImagePickerController/LFImagePickerController/LFImagePickerController/class/LFImagePickerController.bundle",
-			);
-			name = "[CP] Copy Pods Resources";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/LFImagePickerController.bundle",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-ImagePickerSheet/Pods-ImagePickerSheet-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 		852329DB9B6590432EBDDD25 /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -258,6 +240,26 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+		D53FA679D4A36954B8D647F0 /* [CP] Embed Pods Frameworks */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${PODS_ROOT}/Target Support Files/Pods-ImagePickerSheet/Pods-ImagePickerSheet-frameworks.sh",
+				"${BUILT_PRODUCTS_DIR}/LFAssetExportSession/LFAssetExportSession.framework",
+				"${BUILT_PRODUCTS_DIR}/LFImagePickerController/LFImagePickerController.framework",
+			);
+			name = "[CP] Embed Pods Frameworks";
+			outputPaths = (
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/LFAssetExportSession.framework",
+				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/LFImagePickerController.framework",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-ImagePickerSheet/Pods-ImagePickerSheet-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 /* End PBXShellScriptBuildPhase section */

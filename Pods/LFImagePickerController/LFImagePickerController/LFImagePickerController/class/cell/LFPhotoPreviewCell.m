@@ -9,7 +9,7 @@
 #import "LFPhotoPreviewCell.h"
 #import "UIImage+LFCommon.h"
 #import "LFAssetManager.h"
-#import "LFImagePickerHeader.h"
+#import "UIImage+LFDecoded.h"
 
 #ifdef LF_MEDIAEDIT
 #import "LFPhotoEditManager.h"
@@ -75,6 +75,8 @@
 @property (nonatomic, strong) UITapGestureRecognizer *tap1;
 @property (nonatomic, strong) UITapGestureRecognizer *tap2;
 
+@property (nonatomic, assign) BOOL isFinalData;
+
 @end
 
 @implementation LFPhotoPreviewCell
@@ -87,7 +89,7 @@
         _scrollView = [[UIScrollView alloc] init];
         _scrollView.frame = CGRectMake(0, 0, self.frame.size.width, self.frame.size.height);
         _scrollView.bouncesZoom = YES;
-        _scrollView.maximumZoomScale = 2.5;
+        _scrollView.maximumZoomScale = 3.5;
         _scrollView.minimumZoomScale = 1.0;
         _scrollView.multipleTouchEnabled = YES;
         _scrollView.delegate = self;
@@ -137,12 +139,16 @@
 {
     [super prepareForReuse];
     [self subViewReset];
+    _isFinalData = NO;
     _model = nil;
 }
 
 - (UIImage *)previewImage
 {
-    return self.imageView.image;
+    if (self.isFinalData) {
+        return self.imageView.image;
+    }
+    return nil;
 }
 
 - (void)setPreviewImage:(UIImage *)previewImage
@@ -168,8 +174,18 @@
                 
                 void (^completion)(id data,NSDictionary *info,BOOL isDegraded) = ^(id data,NSDictionary *info,BOOL isDegraded){
                     if ([model isEqual:self.model]) {
+                        if (!isDegraded) {
+                            self.isFinalData = YES;
+                        }
                         if ([data isKindOfClass:[UIImage class]]) { /** image */
                             self.previewImage = (UIImage *)data;
+                        } else if ([data isKindOfClass:[NSData class]]) {
+                            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                                UIImage *image = [[UIImage imageWithData:data] lf_decodedImage];
+                                dispatch_async(dispatch_get_main_queue(), ^{
+                                    self.previewImage = image;
+                                });
+                            });
                         }
                         //                _progressView.hidden = YES;
                     }
@@ -192,6 +208,8 @@
             if ([model isEqual:self.model]) {
                 if ([data isKindOfClass:[UIImage class]]) { /** image */
                     self.previewImage = (UIImage *)data;
+                } else if ([data isKindOfClass:[NSData class]]) {
+                    self.previewImage = [UIImage imageWithData:data];
                 }
                 //                _progressView.hidden = YES;
             }
@@ -203,15 +221,31 @@
 
 - (void)willDisplayCell
 {
-    
+//    NSLog(@"%@ - willDisplayCell", self);
+}
+
+- (void)didDisplayCell
+{
+//    NSLog(@"%@ - didDisplayCell", self);
+}
+
+- (void)willEndDisplayCell
+{
+//    NSLog(@"%@ - willEndDisplayCell", self);
 }
 
 - (void)didEndDisplayCell
 {
-    
+//    NSLog(@"%@ - didEndDisplayCell", self);
+    [self resizeSubviews];
 }
 
 - (void)resizeSubviews {
+    
+    if (_imageContainerView.superview != self.scrollView) {
+        return;
+    }
+    
     [self.scrollView setZoomScale:1.f];
     _imageContainerView.frame = self.scrollView.bounds;
     
@@ -219,27 +253,18 @@
     
     if (!CGSizeEqualToSize(imageSize, CGSizeZero)) {
 
-
         UIEdgeInsets ios11Safeinsets = UIEdgeInsetsZero;
-        if (@available(iOS 11.0, *)) {
-            ios11Safeinsets = self.safeAreaInsets;
-        }
+//        if (@available(iOS 11.0, *)) {
+//            ios11Safeinsets = self.safeAreaInsets;
+//        }
         CGSize scrollViewSize = self.scrollView.frame.size;
         scrollViewSize.height -= (ios11Safeinsets.top+ios11Safeinsets.bottom);
         /** 定义最小尺寸,判断为长图，则使用放大处理 */
         CGSize newSize = [UIImage lf_scaleImageSizeBySize:imageSize targetSize:scrollViewSize isBoth:NO];
         
-        BOOL isLongImage = NO;
-        if (self.model.type == LFAssetMediaTypePhoto) {
-//            if ([UIScreen mainScreen].bounds.size.width < [UIScreen mainScreen].bounds.size.height) {
-//                isLongImage = scrollViewSize.width > newSize.width;
-//            } else {
-//                isLongImage = newSize.width < self.bounds.size.height * 0.6;
-//            }
-            isLongImage = lf_isPiiic(newSize);
-            if (isLongImage) { /** 长图 */
-                newSize = [UIImage lf_imageSizeBySize:imageSize maxWidth:self.scrollView.frame.size.width];
-            }
+        BOOL isLongImage = self.model.subType == LFAssetSubMediaTypePhotoPiiic;
+        if (isLongImage) { /** 长图 */
+            newSize = [UIImage lf_imageSizeBySize:imageSize maxWidth:self.scrollView.frame.size.width];
         }
         
         CGRect _imageContainerViewRect = _imageContainerView.frame;
@@ -328,10 +353,28 @@
 /** 设置数据 */
 - (void)subViewSetModel:(LFAsset *)model completeHandler:(void (^)(id data,NSDictionary *info,BOOL isDegraded))completeHandler progressHandler:(void (^)(double progress, NSError *error, BOOL *stop, NSDictionary *info))progressHandler
 {
-    /** 如果已被设置图片，忽略这次图片获取 */
-    if (self.previewImage == nil) {
-        /** 普通图片处理 */
-        [[LFAssetManager manager] getPhotoWithAsset:model.asset photoWidth:[UIScreen mainScreen].bounds.size.width completion:completeHandler progressHandler:progressHandler networkAccessAllowed:YES];
+    /** 普通图片处理 */
+    if (model.type == LFAssetMediaTypePhoto) {
+        // 先获取缩略图
+        PHImageRequestID imageRequestID = [[LFAssetManager manager] getPhotoWithAsset:model.asset photoWidth:self.bounds.size.width completion:^(UIImage *photo, NSDictionary *info, BOOL isDegraded) {
+            
+            if (completeHandler) {
+                completeHandler(photo, info, YES);
+            }
+            
+        }];
+        /** 透明背景的png使用image的加载方式会丢失透明通道。 */
+        [[LFAssetManager manager] getPhotoDataWithAsset:model.asset completion:^(NSData *data, NSDictionary *info, BOOL isDegraded) {
+
+            [[LFAssetManager manager] cancelImageRequest:imageRequestID];
+
+            if (completeHandler) {
+                completeHandler(data, info, isDegraded);
+            }
+
+        } progressHandler:progressHandler networkAccessAllowed:YES];
+    } else {
+        [[LFAssetManager manager] getPhotoWithAsset:model.asset photoWidth:self.bounds.size.width*[UIScreen mainScreen].scale completion:completeHandler progressHandler:progressHandler networkAccessAllowed:YES];
     }
 }
 

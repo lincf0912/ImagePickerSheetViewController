@@ -19,8 +19,15 @@ typedef NS_ENUM(NSUInteger, LFAssetMediaType) {
 typedef NS_ENUM(NSUInteger, LFAssetSubMediaType) {
     LFAssetSubMediaTypeNone = 0,
     
+    /** 动图 */
     LFAssetSubMediaTypeGIF = 10,
+    /** live photo */
     LFAssetSubMediaTypeLivePhoto,
+    
+    /** 全景图、横图 */
+    LFAssetSubMediaTypePhotoPanorama = 50,
+    /** 长图 */
+    LFAssetSubMediaTypePhotoPiiic,
 };
 
 @interface LFAsset : NSObject

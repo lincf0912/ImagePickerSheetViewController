@@ -1,1 +1,0 @@
-../../../LFImagePickerController/LFImagePickerController/LFImagePickerController/class/utils/Category/UIScrollView+LFDragAutoScroll.h

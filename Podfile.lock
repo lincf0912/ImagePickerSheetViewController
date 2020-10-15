@@ -1,22 +1,26 @@
 PODS:
-  - LFImagePickerController (1.6.8.3):
-    - LFImagePickerController/Core (= 1.6.8.3)
-  - LFImagePickerController/Core (1.6.8.3):
+  - LFAssetExportSession (1.0.2)
+  - LFImagePickerController (1.7.3.2):
+    - LFImagePickerController/Core (= 1.7.3.2)
+  - LFImagePickerController/Core (1.7.3.2):
+    - LFAssetExportSession
     - LFImagePickerController/LFGifPlayer
     - LFImagePickerController/LFToGIF
-  - LFImagePickerController/LFGifPlayer (1.6.8.3)
-  - LFImagePickerController/LFToGIF (1.6.8.3)
+  - LFImagePickerController/LFGifPlayer (1.7.3.2)
+  - LFImagePickerController/LFToGIF (1.7.3.2)
 
 DEPENDENCIES:
   - LFImagePickerController
 
 SPEC REPOS:
   trunk:
+    - LFAssetExportSession
     - LFImagePickerController
 
 SPEC CHECKSUMS:
-  LFImagePickerController: 030c59d6776d8e9c1423e18a1c75c058106c6215
+  LFAssetExportSession: bd22818d071a842fd594a72f188321a91ba13f0d
+  LFImagePickerController: 8555536985af7b80167476cf267824f69102da62
 
-PODFILE CHECKSUM: d9c09d26a9fa7e484f4fd6b2875979c4f3e3ef1d
+PODFILE CHECKSUM: f6fb2f87c1fdaa6e3acd757765998cbb92c047bb
 
-COCOAPODS: 1.8.4
+COCOAPODS: 1.9.3

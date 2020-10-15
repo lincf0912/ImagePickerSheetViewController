@@ -23,19 +23,19 @@
 + (instancetype)manager NS_SWIFT_NAME(default());
 + (void)free;
 
-/** 缩放值 */
-@property (nonatomic, readonly) CGFloat screenScale;
 /** default YES，fix image orientation */
 @property (nonatomic, assign) BOOL shouldFixOrientation;
+/** default YES，decode image */
+@property (nonatomic, assign) BOOL shouldDecoded;
 
 /// 最小可选中的图片宽度，默认是0，小于这个宽度的图片不可选中
-@property (nonatomic, assign) NSInteger minPhotoWidthSelectable;
-@property (nonatomic, assign) NSInteger minPhotoHeightSelectable;
+//@property (nonatomic, assign) NSInteger minPhotoWidthSelectable;
+//@property (nonatomic, assign) NSInteger minPhotoHeightSelectable;
+/// 默认为YES，预览时自动播放live photo；否则需要长按照片才会播放。
+@property (nonatomic, assign) BOOL autoPlayLivePhoto;
 
-#if __IPHONE_OS_VERSION_MAX_ALLOWED < __IPHONE_8_0
 /** 默认相册对象 */
-@property (nonatomic, readonly) ALAssetsLibrary *assetLibrary;
-#endif
+@property (nonatomic, readonly) ALAssetsLibrary *assetLibrary AL_DEPRECATED(4, "Use PHPhotoLibrary from the Photos framework instead");
 
 /**
  *  @author lincf, 16-07-28 17:07:38
@@ -81,6 +81,9 @@
 /// Get photo 获得照片
 - (void)getPostImageWithAlbumModel:(LFAlbum *)model ascending:(BOOL)ascending completion:(void (^)(UIImage *postImage))completion;
 
+/** 仅仅获取缩略图 */
+- (PHImageRequestID)getThumbnailWithAsset:(id)asset photoWidth:(CGFloat)photoWidth completion:(void (^)(UIImage *photo,NSDictionary *info,BOOL isDegraded))completion;
+
 /** 获取照片对象 回调 image */
 - (PHImageRequestID)getPhotoWithAsset:(id)asset completion:(void (^)(UIImage *photo,NSDictionary *info,BOOL isDegraded))completion;
 - (PHImageRequestID)getPhotoWithAsset:(id)asset photoWidth:(CGFloat)photoWidth completion:(void (^)(UIImage *photo,NSDictionary *info,BOOL isDegraded))completion;
@@ -94,6 +97,9 @@
 - (PHImageRequestID)getLivePhotoWithAsset:(id)asset completion:(void (^)(PHLivePhoto *livePhoto,NSDictionary *info,BOOL isDegraded))completion API_AVAILABLE(ios(9.1));
 - (PHImageRequestID)getLivePhotoWithAsset:(id)asset photoWidth:(CGFloat)photoWidth completion:(void (^)(PHLivePhoto *livePhoto,NSDictionary *info,BOOL isDegraded))completion API_AVAILABLE(ios(9.1));
 - (PHImageRequestID)getLivePhotoWithAsset:(id)asset photoWidth:(CGFloat)photoWidth completion:(void (^)(PHLivePhoto *livePhoto,NSDictionary *info,BOOL isDegraded))completion progressHandler:(void (^)(double progress, NSError *error, BOOL *stop, NSDictionary *info))progressHandler networkAccessAllowed:(BOOL)networkAccessAllowed API_AVAILABLE(ios(9.1));
+
+/** 停止获取照片对象 */
+- (void)cancelImageRequest:(PHImageRequestID)requestID;
 
 /**
  *  通过asset解析缩略图、标清图/原图、图片数据字典
@@ -141,11 +147,13 @@
 
  @param asset PHAsset
  @param isOriginal 是否原图
+ @param needThumbnail 需要缩略图
  @param completion  返回block 顺序：缩略图、标清图、图片数据字典
  */
 - (void)getLivePhotoWithAsset:(id)asset
                    isOriginal:(BOOL)isOriginal
-                   completion:(void (^)(LFResultImage *resultImage))completion;
+                needThumbnail:(BOOL)needThumbnail
+                   completion:(void (^)(LFResultImage *resultImage))completion API_AVAILABLE(ios(9.1));
 
 /// Get video 获得视频
 - (void)getVideoWithAsset:(id)asset completion:(void (^)(AVPlayerItem * playerItem, NSDictionary * info))completion;
@@ -160,7 +168,7 @@
  *  视频压缩并缓存压缩后视频 (将视频格式变为mp4)
  *
  *  @param asset      PHAsset／ALAsset
- *  @param presetName 压缩预设名称 nil则默认为AVAssetExportPresetMediumQuality
+ *  @param presetName 压缩预设名称 nil则默认为AVAssetExportPreset1280x720
  *  @param completion 回调压缩后视频路径，可以复制或剪切
  */
 - (void)compressAndCacheVideoWithAsset:(id)asset
@@ -178,7 +186,7 @@
 - (NSString *)getAssetIdentifier:(id)asset;
 
 /// 检查照片大小是否满足最小要求
-- (BOOL)isPhotoSelectableWithAsset:(id)asset;
+//- (BOOL)isPhotoSelectableWithAsset:(id)asset;
 - (CGSize)photoSizeWithAsset:(id)asset;
 
 /// 获取照片名称

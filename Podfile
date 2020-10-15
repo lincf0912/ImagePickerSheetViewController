@@ -8,6 +8,7 @@ platform :ios, '7.0'
 inhibit_all_warnings!
 
 target 'ImagePickerSheet' do
+use_frameworks!
 pod 'LFImagePickerController'
 #pod 'LFImagePickerController/LFMediaEdit'
 end

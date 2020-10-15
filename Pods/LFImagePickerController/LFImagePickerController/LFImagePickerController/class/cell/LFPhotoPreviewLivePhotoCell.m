@@ -7,6 +7,7 @@
 //
 
 #import "LFPhotoPreviewLivePhotoCell.h"
+#import "LFPhotoPreviewCell_property.h"
 #import "LFAssetManager.h"
 #import <PhotosUI/PhotosUI.h>
 
@@ -37,42 +38,68 @@
     [_livePhotoView stopPlayback];
     _livePhotoView.livePhoto = nil;
 }
+
+/** 图片大小 */
+- (CGSize)subViewImageSize
+{
+    if (self.livePhotoView.livePhoto) {
+        return self.livePhotoView.livePhoto.size;
+    }
+    return self.imageView.image.size;
+}
+
 /** 设置数据 */
 - (void)subViewSetModel:(LFAsset *)model completeHandler:(void (^)(id data,NSDictionary *info,BOOL isDegraded))completeHandler progressHandler:(void (^)(double progress, NSError *error, BOOL *stop, NSDictionary *info))progressHandler
 {
-    [super subViewSetModel:model completeHandler:completeHandler progressHandler:progressHandler];
     if (model.subType == LFAssetSubMediaTypeLivePhoto) { /** live photo */
-        [[LFAssetManager manager] getLivePhotoWithAsset:model.asset photoWidth:[UIScreen mainScreen].bounds.size.width completion:^(PHLivePhoto *livePhoto, NSDictionary *info, BOOL isDegraded) {
+        // 需要获取原图和缩略图
+        [super subViewSetModel:model completeHandler:completeHandler progressHandler:progressHandler];
+        // 获取livephoto
+        [[LFAssetManager manager] getLivePhotoWithAsset:model.asset photoWidth:0 completion:^(PHLivePhoto *livePhoto, NSDictionary *info, BOOL isDegraded) {
             
             if ([model isEqual:self.model]) { /** live photo */
                 self.livePhotoView.livePhoto = livePhoto;
-                if (model.closeLivePhoto == NO) {
-                    self.livePhotoView.delegate = self;
-                    [self.livePhotoView startPlaybackWithStyle:PHLivePhotoViewPlaybackStyleFull];
-                }
-                if (completeHandler) {
-                    completeHandler(livePhoto, info, isDegraded);
-                }
+//                if (model.closeLivePhoto == NO) {
+//                    self.livePhotoView.delegate = self;
+//                    [self.livePhotoView startPlaybackWithStyle:PHLivePhotoViewPlaybackStyleFull];
+//                }
+                [self resizeSubviews]; // 刷新subview的位置。
             }
             
         } progressHandler:progressHandler networkAccessAllowed:YES];
+    } else {
+        [super subViewSetModel:model completeHandler:completeHandler progressHandler:progressHandler];
     }
 }
 
-- (void)willDisplayCell
+- (void)didDisplayCell
 {
+    [super didDisplayCell];
     if (self.model.subType == LFAssetSubMediaTypeLivePhoto && self.model.closeLivePhoto == NO) { /** live photo */
-        _livePhotoView.delegate = self;
-        [_livePhotoView startPlaybackWithStyle:PHLivePhotoViewPlaybackStyleFull];
+        [self didPlayCell];
     }
 }
 
-- (void)didEndDisplayCell
+- (void)willEndDisplayCell
 {
+    [super willEndDisplayCell];
     if (self.model.subType == LFAssetSubMediaTypeLivePhoto) { /** live photo */
-        _livePhotoView.delegate = nil;
-        [_livePhotoView stopPlayback];
+        [self didStopCell];
     }
+}
+
+- (void)didPlayCell
+{
+    _livePhotoView.playbackGestureRecognizer.enabled = NO;
+    _livePhotoView.delegate = self;
+    [_livePhotoView startPlaybackWithStyle:PHLivePhotoViewPlaybackStyleFull];
+}
+
+- (void)didStopCell
+{
+    _livePhotoView.playbackGestureRecognizer.enabled = YES;
+    _livePhotoView.delegate = nil;
+    [_livePhotoView stopPlayback];
 }
 
 #pragma mark - PHLivePhotoViewDelegate
